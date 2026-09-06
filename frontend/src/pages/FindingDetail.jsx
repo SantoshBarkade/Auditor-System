@@ -3,28 +3,15 @@ import {
   ArrowLeft,
   Shield,
   CheckCircle2,
-  AlertTriangle,
   AlertOctagon,
-  FileCode,
   Terminal,
-  Layers,
   Database,
   Scale,
   Sparkles,
   Wrench,
   Lock,
-  RotateCcw,
-  Play,
-  ArrowRight,
-  ExternalLink,
   Code,
-  Info,
-  Check,
-  X,
-  ChevronDown,
-  ChevronRight,
-  HelpCircle,
-  FileSpreadsheet
+  Check
 } from 'lucide-react';
 import { api } from '../services/api';
 import StatusBadge from '../components/ui/StatusBadge';
@@ -38,9 +25,6 @@ export default function FindingDetail({
   const [pipelineData, setPipelineData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // Active section for quick navigation
-  const [activeSection, setActiveSection] = useState('all');
 
   // Interactive Sandbox Verification state
   const [simulating, setSimulating] = useState(false);
@@ -263,15 +247,34 @@ export default function FindingDetail({
   } = pipelineData;
 
   const targetLine = source?.line_number || (finding?.line_numbers?.[0]) || 26;
+  function handleSelectStage(stage) {
+    if (!stage?.id) return;
+    const stageMap = {
+      configuration: 'sec-evidence',
+      vendor_detection: 'sec-evidence',
+      parser: 'sec-evidence',
+      evidence: 'sec-evidence',
+      normalization: 'sec-normalization',
+      normalized_facts: 'sec-normalization',
+      security_state: 'sec-compliance',
+      compliance_engine: 'sec-compliance',
+      verdict: 'sec-compliance',
+      risk_engine: 'sec-risk',
+      remediation: 'sec-risk',
+      ai_advisory: 'sec-ai-ledger',
+      human_resolution: 'sec-ai-ledger',
+      blockchain_ledger: 'sec-ai-ledger',
+      reports: 'sec-ai-ledger'
+    };
+    const targetId = stageMap[stage.id];
+    if (targetId) {
+      const el = document.getElementById(targetId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  }
 
-  const navSections = [
-    { id: 'all', label: 'All Stages (Full Inspection)' },
-    { id: 'evidence', label: '01. Evidence & Code' },
-    { id: 'normalization', label: '02. Normalization & Facts' },
-    { id: 'compliance', label: '03. Compliance & Frameworks' },
-    { id: 'risk', label: '04. Risk & Remediation' },
-    { id: 'ai_ledger', label: '05. AI Advisory & Blockchain' }
-  ];
 
   return (
     <div className="space-y-8 pb-20 animate-in fade-in duration-200">
@@ -373,48 +376,13 @@ export default function FindingDetail({
       <AnalysisPipeline
         stages={pipeline?.stages || []}
         activeStageId={null}
-        onSelectStage={(stage) => {
-          // When clicking a stage, jump to corresponding view
-          if (['configuration', 'vendor_detection', 'parser', 'evidence'].includes(stage.id)) {
-            setActiveSection('evidence');
-          } else if (['normalization', 'normalized_facts'].includes(stage.id)) {
-            setActiveSection('normalization');
-          } else if (['security_state', 'compliance_engine', 'verdict'].includes(stage.id)) {
-            setActiveSection('compliance');
-          } else if (['risk_engine', 'remediation'].includes(stage.id)) {
-            setActiveSection('risk');
-          } else if (['ai_advisory', 'human_resolution', 'blockchain_ledger', 'reports'].includes(stage.id)) {
-            setActiveSection('ai_ledger');
-          }
-        }}
+        onSelectStage={handleSelectStage}
       />
-
-      {/* 3. Sleek Quick-Navigation Section Bar */}
-      <div className="sticky top-14 z-20 bg-[#06090F]/95 backdrop-blur-md py-2.5 border-y border-slate-800/80 -mx-4 sm:-mx-8 lg:-mx-10 px-4 sm:px-8 lg:px-10 overflow-x-auto">
-        <div className="flex items-center space-x-2 min-w-max">
-          {navSections.map((sec) => {
-            const isActive = activeSection === sec.id;
-            return (
-              <button
-                key={sec.id}
-                onClick={() => setActiveSection(sec.id)}
-                className={`px-4 py-2 rounded-xl text-sm font-bold font-mono transition-all cursor-pointer ${
-                  isActive
-                    ? 'bg-cyan-500 text-slate-950 shadow-sm'
-                    : 'bg-slate-900/80 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
-                }`}
-              >
-                {sec.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
 
       {/* ==================================================================== */}
       {/* SECTION 1: Evidence & AST Code Viewer */}
       {/* ==================================================================== */}
-      {(activeSection === 'all' || activeSection === 'evidence') && (
+      
         <section id="sec-evidence" className="space-y-4">
           <div className="p-6 sm:p-8 rounded-2xl bg-slate-900/60 border border-slate-800 shadow-sm space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
@@ -476,12 +444,11 @@ export default function FindingDetail({
             </div>
           </div>
         </section>
-      )}
 
       {/* ==================================================================== */}
       {/* SECTION 2: Normalization & Normalized Facts */}
       {/* ==================================================================== */}
-      {(activeSection === 'all' || activeSection === 'normalization') && (
+      
         <section id="sec-normalization" className="space-y-6">
           {/* Side-by-Side Normalization */}
           <div className="p-6 sm:p-8 rounded-2xl bg-slate-900/60 border border-slate-800 shadow-sm space-y-5">
@@ -599,12 +566,11 @@ export default function FindingDetail({
             </div>
           </div>
         </section>
-      )}
 
       {/* ==================================================================== */}
       {/* SECTION 3: Security State & Compliance Engine */}
       {/* ==================================================================== */}
-      {(activeSection === 'all' || activeSection === 'compliance') && (
+      
         <section id="sec-compliance" className="space-y-6">
           {/* Deterministic Security Meaning & State */}
           <div className="p-6 sm:p-8 rounded-2xl bg-slate-900/60 border border-slate-800 shadow-sm space-y-5">
@@ -807,12 +773,11 @@ export default function FindingDetail({
             </div>
           </div>
         </section>
-      )}
 
       {/* ==================================================================== */}
       {/* SECTION 4: Risk Calculation & Remediation */}
       {/* ==================================================================== */}
-      {(activeSection === 'all' || activeSection === 'risk') && (
+      
         <section id="sec-risk" className="space-y-6">
           {/* Deterministic 4-Factor Risk Engine */}
           <div className="p-6 sm:p-8 rounded-2xl bg-slate-900/60 border border-slate-800 shadow-sm space-y-6">
@@ -999,12 +964,11 @@ export default function FindingDetail({
             </div>
           </div>
         </section>
-      )}
 
       {/* ==================================================================== */}
       {/* SECTION 5: AI Advisory & Immutable Blockchain Ledger */}
       {/* ==================================================================== */}
-      {(activeSection === 'all' || activeSection === 'ai_ledger') && (
+      
         <section id="sec-ai-ledger" className="space-y-6">
           {/* AI Advisory Section (Explicitly Advisory Only) */}
           <div className="p-6 sm:p-8 rounded-2xl bg-slate-900/60 border border-slate-800 shadow-sm space-y-5">
@@ -1104,7 +1068,6 @@ export default function FindingDetail({
             </div>
           </div>
         </section>
-      )}
     </div>
   );
 }
