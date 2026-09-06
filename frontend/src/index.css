@@ -1,5 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -7,71 +7,63 @@
 
 @layer base {
   :root {
-    --bg-main: #FFFFFF;
-    --bg-surface: #FFFFFF;
-    --bg-secondary: #F8FAFC;
-    --border-color: #F1F5F9;
+    --bg-main: #06090F;
+    --bg-surface: #0B0F19;
+    --bg-card: #0F172A;
+    --bg-secondary: #111827;
+    --border-color: #1E293B;
     
-    --text-primary: #0F172A;
-    --text-secondary: #475569;
-    --text-muted: #94A3B8;
+    --text-primary: #F8FAFC;
+    --text-secondary: #94A3B8;
+    --text-muted: #64748B;
     
-    /* Restrained Semantic Colors */
-    --color-critical: #B91C1C;
-    --color-high: #C2410C;
-    --color-medium: #B45309;
-    --color-low: #1D4ED8;
-    --color-secure: #047857;
-    --color-unresolved: #64748B;
-    --color-conflict: #4338CA;
+    /* Semantic Status Colors */
+    --color-pass: #10B981;
+    --color-fail: #F43F5E;
+    --color-unresolved: #F59E0B;
+    --color-conflict: #6366F1;
+    --color-na: #64748B;
+  }
+
+  html {
+    /* Standard comfortable base font-size for high readability */
+    font-size: 16px;
   }
 
   body {
-    @apply bg-white text-[var(--text-primary)] antialiased;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: #06090F;
+    color: #F8FAFC;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-size: 1rem;
+    line-height: 1.6;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply font-semibold tracking-tight text-[var(--text-primary)];
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color: #F8FAFC;
+    letter-spacing: -0.02em;
   }
 
   .font-mono {
-    font-family: 'Roboto Mono', monospace;
+    font-family: 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    letter-spacing: -0.01em;
   }
 }
 
-@layer components {
-  /* Deprecating old cards */
-  .premium-card {
-    @apply bg-white border border-slate-100 rounded-none shadow-none;
-  }
-  
-  .premium-card-header {
-    @apply flex items-center justify-between px-6 py-4 border-b border-slate-100;
-  }
-
-  .premium-badge {
-    @apply px-2 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase;
-  }
-
-  /* Editorial sections */
-  .editorial-section {
-    @apply py-8 border-b border-slate-100 last:border-b-0;
-  }
-}
-
-/* Custom Scrollbar for a premium feel */
+/* Custom Scrollbar for dark premium enterprise feel */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #06090F;
 }
 ::-webkit-scrollbar-thumb {
-  background: #E2E8F0;
-  border-radius: 2px;
+  background: #1E293B;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #CBD5E1;
+  background: #334155;
 }

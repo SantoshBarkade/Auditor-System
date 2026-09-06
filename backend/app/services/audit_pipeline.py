@@ -1,4 +1,4 @@
-import hashlib
+﻿import hashlib
 from typing import Dict, Any, List
 from sqlalchemy import select
 from backend.app.core.database import AsyncSessionLocal
@@ -7,6 +7,9 @@ from backend.app.services.normalization.normalizer import NormalizerService
 from backend.app.services.security_engine.evaluator import SecurityEvaluator
 from backend.app.services.compliance.mapping_engine import ComplianceEngine
 from backend.app.services.blockchain.chain import BlockchainLedger
+from backend.app.models.unresolved import UnresolvedCase
+from backend.app.services.unresolved.classifier import UnresolvedClassifier
+from backend.app.services.unresolved.lifecycle import UnresolvedLifecycle
 
 class AuditPipelineService:
     """
@@ -125,6 +128,35 @@ class AuditPipelineService:
                 session.add(finding)
                 created_findings.append(finding)
 
+            await session.flush()
+
+            # Promote UNRESOLVED findings to UnresolvedCases
+            for finding, f_data in zip(created_findings, findings_data):
+                if finding.verdict == "UNRESOLVED":
+                    case_type, detail = UnresolvedClassifier.classify(f_data)
+                    
+                    case = UnresolvedCase(
+                        audit_id=audit.id,
+                        configuration_id=config.id,
+                        finding_id=finding.id,
+                        case_type=case_type,
+                        reason=f_data.get("description", "Unknown reason")[:500],
+                        vendor=vendor,
+                        feature=f_data.get("category"),
+                        rule_id=f_data.get("rule_id"),
+                        source_lines=f_data.get("line_numbers", []),
+                        source_text=f_data.get("evidence"),
+                    )
+                    
+                    if case_type == "MISSING_REFERENCE":
+                        case.missing_reference = detail
+                    else:
+                        case.unknown_syntax = detail
+                        
+                    session.add(case)
+                    await session.flush()
+                    await UnresolvedLifecycle.record_creation(session, case)
+
             await session.commit()
             await session.refresh(audit)
 
@@ -148,3 +180,4 @@ class AuditPipelineService:
                 "normalized": normalized,
                 "compliance_posture": posture
             }
+

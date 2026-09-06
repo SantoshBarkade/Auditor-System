@@ -9,7 +9,7 @@
    - Problem Statement: **SIH26155 — AI-Driven Multi-Vendor Network Security Compliance Auditor**.
    - Team: **WeirdBits**.
    - Theme: **Blockchain & Cybersecurity**.
-2. Note the live **CHAIN VALID** blockchain badge and **Deterministic Fallback / Gemini** engine status.
+2. Note the live **CHAIN VALID** blockchain badge and **Deterministic Fallback / NVIDIA AI** engine status.
 
 ---
 

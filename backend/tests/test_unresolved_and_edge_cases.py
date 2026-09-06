@@ -1,4 +1,4 @@
-import pytest
+﻿import pytest
 from unittest.mock import patch, MagicMock
 import httpx
 from backend.app.services.risk_engine.calculator import RiskCalculator
@@ -23,31 +23,25 @@ def test_risk_calculator_boundary_clamping():
     assert RiskCalculator.calculate_score(5, 5, 5, 5) == 100
 
 @pytest.mark.asyncio
-async def test_gemini_fallback_on_503():
-    with patch("httpx.AsyncClient.post") as mock_post:
-        # Simulate a 503 Service Unavailable response
-        mock_resp = MagicMock()
-        mock_resp.status_code = 503
-        mock_resp.text = "Service Unavailable"
-        mock_post.return_value = mock_resp
+async def test_NVIDIA_fallback_on_503():
+    with patch('openai.resources.chat.completions.AsyncCompletions.create') as mock_create:
+        mock_create.side_effect = Exception('API Error')
         
-        # Test with a mock API key to trigger the _call_gemini branch
-        with patch("backend.app.core.config.settings.GEMINI_API_KEY", "fake_key"):
+        with patch('backend.app.core.config.settings.NVIDIA_API_KEY', 'fake_key'):
             result = await AIExplanationService.explain_finding(
-                title="Test Finding",
-                vendor="Cisco",
-                category="Authentication",
-                severity="HIGH",
-                evidence="transport input telnet",
-                impact="Cleartext intercept",
-                remediation="transport input ssh"
+                title='Test Finding',
+                vendor='Cisco',
+                category='Authentication',
+                severity='HIGH',
+                evidence='transport input telnet',
+                impact='Cleartext intercept',
+                remediation='transport input ssh'
             )
             
-            # Since the API failed, we expect the deterministic fallback
             assert result is not None
-            assert "source" in result
-            assert "Deterministic Security Engine (AI Fallback)" in result["source"]
-            assert result["summary"].startswith("Deterministic security rule identified")
+            assert 'source' in result
+            assert 'Deterministic Security Engine (AI Fallback)' in result['source']
+            assert result['summary'].startswith('Deterministic security rule identified')
 
 def test_cisco_unresolved_verdict():
     raw_config = "hostname Switch\npassword cleartext fake\n"
@@ -85,3 +79,4 @@ def test_juniper_unresolved_verdict():
     
     unresolved_findings = [f for f in findings if f["verdict"] == "UNRESOLVED"]
     assert len(unresolved_findings) > 0
+

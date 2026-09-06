@@ -5,6 +5,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.core.database import get_db
 from backend.app.models.models import Configuration, Audit, Finding, Device
+from backend.app.models.unresolved import UnresolvedCase, UnresolvedStatus
 from backend.app.schemas.schemas import DashboardSummaryResponse
 from backend.app.services.blockchain.chain import BlockchainLedger
 from backend.app.services.audit_pipeline import AuditPipelineService
@@ -90,7 +91,24 @@ async def get_dashboard_summary(db: AsyncSession = Depends(get_db)):
         for f in recent_findings_raw
     ]
 
+    # Count unresolved cases
+    unresolved_res = await db.execute(
+        select(func.count(UnresolvedCase.id))
+        .where(UnresolvedCase.status.in_([UnresolvedStatus.OPEN, UnresolvedStatus.ANALYZING, UnresolvedStatus.AWAITING_REVIEW]))
+    )
+    unresolved_count = unresolved_res.scalar() or 0
+
+    pass_count = sum(1 for f in findings if f.verdict == "PASS")
+    fail_count = sum(1 for f in findings if f.verdict == "FAIL")
+    na_count = sum(1 for f in findings if f.verdict == "N/A")
+    conflict_count = sum(1 for f in findings if f.verdict == "CONFLICT")
+
     return DashboardSummaryResponse(
+        unresolved_count=unresolved_count,
+        pass_findings=pass_count,
+        fail_findings=fail_count,
+        na_findings=na_count,
+        conflict_findings=conflict_count,
         total_configurations=total_configs,
         total_audits=total_audits,
         critical_findings=crit_count,

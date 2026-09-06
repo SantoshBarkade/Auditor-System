@@ -25,7 +25,7 @@ NEXORA operates as an AI-driven, multi-vendor network security compliance audito
   │ 4. Deterministic Security Engine (Authoritative PASS/FAIL Rules)│
   │ 5. Mathematical Risk Engine (Weighted Multi-Factor 0-100 Score) │
   │ 6. Compliance Mapping Engine (NIST CSF 2.0, 800-53, CIS, ISO)   │
-  │ 7. Assistive AI Layer (Gemini Generative AI + Offline Fallback) │
+  │ 7. Assistive AI Layer (NVIDIA OpenAI-Compatible API + Offline Fallback) │
   │ 8. Remediation Simulator (Sandboxed Configuration Patching)     │
   │ 9. Verification Engine (Deterministic Re-Audit & Delta Check)   │
   │ 10. Cryptographic Blockchain (SHA-256 Tamper-Evident Ledger)    │

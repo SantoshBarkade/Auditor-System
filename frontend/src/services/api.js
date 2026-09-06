@@ -175,6 +175,89 @@ export const api = {
     return res.json();
   },
 
+  // Unresolved Cases (Grounded in /api/v1/unresolved/audit/{id} and /api/v1/unresolved/{id})
+  getUnresolvedCases: async (params = {}) => {
+    try {
+      if (params.audit_id) {
+        const res = await fetch(`${API_BASE}/unresolved/audit/${params.audit_id}`);
+        if (res.ok) return await res.json();
+      }
+      const auditsRes = await fetch(`${API_BASE}/audits`);
+      if (auditsRes.ok) {
+        const audits = await auditsRes.json();
+        let allCases = [];
+        for (const a of audits.slice(0, 10)) {
+          const cRes = await fetch(`${API_BASE}/unresolved/audit/${a.id}`);
+          if (cRes.ok) {
+            const cases = await cRes.json();
+            allCases = allCases.concat(cases);
+          }
+        }
+        if (allCases.length > 0) return allCases;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch unresolved cases', e);
+    }
+    return [];
+  },
+
+  getUnresolvedStats: async () => {
+    try {
+      const cases = await api.getUnresolvedCases();
+      const open = cases.filter(c => c.status === 'OPEN').length;
+      const awaiting_review = cases.filter(c => c.status === 'AWAITING_REVIEW' || c.status === 'ANALYZING').length;
+      const resolved = cases.filter(c => c.status === 'RESOLVED' || c.status === 'CONFIRMED_SAFE' || c.status === 'CONFIRMED_VIOLATION').length;
+      return { total: cases.length, open, awaiting_review, resolved };
+    } catch (e) {
+      return { total: 0, open: 0, awaiting_review: 0, resolved: 0 };
+    }
+  },
+  getUnresolvedCase: async (id) => {
+    const res = await fetch(`${API_BASE}/unresolved/${id}`);
+    return res.json();
+  },
+
+  getUnresolvedHistory: async (id) => {
+    const res = await fetch(`${API_BASE}/unresolved/${id}/history`);
+    return res.json();
+  },
+
+  triggerAIInvestigation: async (id, actor = 'Security Analyst') => {
+    const res = await fetch(`${API_BASE}/unresolved/${id}/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actor })
+    });
+    return res.json();
+  },
+
+  submitCaseReview: async (id, reviewer, notes, additional_context = null) => {
+    const res = await fetch(`${API_BASE}/unresolved/${id}/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reviewer, notes, additional_context })
+    });
+    return res.json();
+  },
+
+  resolveCase: async (id, reviewer, final_verdict, resolution_context, resolution_evidence = {}) => {
+    const res = await fetch(`${API_BASE}/unresolved/${id}/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reviewer, final_verdict, resolution_context, resolution_evidence })
+    });
+    return res.json();
+  },
+
+  rejectCase: async (id, reviewer, reason) => {
+    const res = await fetch(`${API_BASE}/unresolved/${id}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reviewer, reason })
+    });
+    return res.json();
+  },
+
   // Semantic Convergence Demo
   getConvergenceDemo: async () => {
     const res = await fetch(`${API_BASE}/configurations/convergence/demo`);

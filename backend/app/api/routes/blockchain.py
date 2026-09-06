@@ -1,4 +1,4 @@
-from typing import List
+﻿from typing import List
 from fastapi import APIRouter
 from backend.app.schemas.schemas import BlockchainBlockResponse, BlockchainVerifyResponse, TamperTestResponse
 from backend.app.services.blockchain.chain import BlockchainLedger
@@ -25,7 +25,13 @@ async def verify_blockchain():
         message=msg
     )
 
+from backend.app.core.config import settings
+from fastapi import HTTPException
+
 @router.post("/tamper-test", response_model=TamperTestResponse)
 async def live_tamper_demonstration():
+    if not settings.DEBUG:
+        raise HTTPException(status_code=403, detail="Tamper testing is disabled in production")
     result = await BlockchainLedger.simulate_tamper_demonstration()
     return TamperTestResponse(**result)
+

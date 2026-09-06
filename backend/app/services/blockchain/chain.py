@@ -1,6 +1,7 @@
-import hashlib
+﻿import hashlib
 import json
 import datetime
+from datetime import timezone
 from typing import List, Dict, Any, Tuple, Optional
 from sqlalchemy import select
 from backend.app.core.database import AsyncSessionLocal
@@ -53,7 +54,7 @@ class BlockchainLedger:
 
             if latest is None:
                 # Create Genesis Block first
-                genesis_time = datetime.datetime.utcnow()
+                genesis_time = datetime.datetime.now(timezone.utc).replace(tzinfo=None)
                 genesis_payload_hash = cls.calculate_payload_hash({"message": "NEXORA Genesis Ledger Initialized"})
                 genesis_hash = cls.calculate_block_hash(
                     block_index=0,
@@ -81,7 +82,7 @@ class BlockchainLedger:
 
             # Now append new event
             new_index = latest.block_index + 1
-            now = datetime.datetime.utcnow()
+            now = datetime.datetime.now(timezone.utc).replace(tzinfo=None)
             payload_hash = cls.calculate_payload_hash(event_data)
             block_hash = cls.calculate_block_hash(
                 block_index=new_index,
@@ -211,3 +212,5 @@ class BlockchainLedger:
                 "repaired_status": "CHAIN RESTORED & VALID" if is_valid_after else "REPAIR FAILED",
                 "message": "Cryptographic tamper demonstration executed successfully. Unauthorized mutations to historical blocks are instantly caught by SHA-256 link validation."
             }
+
+

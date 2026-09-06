@@ -116,6 +116,11 @@ class TamperTestResponse(BaseModel):
     message: str
 
 class DashboardSummaryResponse(BaseModel):
+    unresolved_count: int = 0
+    pass_findings: int = 0
+    fail_findings: int = 0
+    na_findings: int = 0
+    conflict_findings: int = 0
     total_configurations: int
     total_audits: int
     critical_findings: int

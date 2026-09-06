@@ -1,4 +1,7 @@
-import pytest
+﻿import pytest
+from pathlib import Path
+
+SAMPLE_DIR = Path(__file__).resolve().parent.parent.parent / "sample_configs"
 from fastapi.testclient import TestClient
 from backend.app.main import app
 
@@ -11,7 +14,7 @@ def test_full_cisco_insecure_demo():
     assert res.json()["status"] == "healthy"
 
     # 2. Upload cisco insecure
-    with open("sample_configs/cisco_insecure.cfg", "r", encoding="utf-8") as f:
+    with open(SAMPLE_DIR / "cisco_insecure.cfg", "r", encoding="utf-8") as f:
         content = f.read()
 
     res = client.post("/api/v1/configurations/upload", json={
@@ -92,12 +95,18 @@ def test_full_cisco_insecure_demo():
     assert res.json()["is_valid"] is True
 
     # 11. Tamper test
-    res = client.post("/api/v1/blockchain/tamper-test")
-    assert res.status_code == 200
-    t_res = res.json()
-    assert t_res["before_status"] == "CHAIN VALID"
-    assert "TAMPERING DETECTED" in t_res["during_status"]
-    assert t_res["repaired_status"] == "CHAIN RESTORED & VALID"
+    from backend.app.core.config import settings
+    original_debug = settings.DEBUG
+    settings.DEBUG = True
+    try:
+        res = client.post("/api/v1/blockchain/tamper-test")
+        assert res.status_code == 200
+        t_res = res.json()
+        assert t_res["before_status"] == "CHAIN VALID"
+        assert "TAMPERING DETECTED" in t_res["during_status"]
+        assert t_res["repaired_status"] == "CHAIN RESTORED & VALID"
+    finally:
+        settings.DEBUG = original_debug
 
     # 12. Reports
     res = client.get(f"/api/v1/reports/{audit_id}/json")
@@ -115,7 +124,7 @@ def test_full_cisco_insecure_demo():
 
 def test_fortinet_and_juniper_insecure_demo():
     # Fortinet
-    with open("sample_configs/fortigate_insecure.conf", "r", encoding="utf-8") as f:
+    with open(SAMPLE_DIR / "fortigate_insecure.conf", "r", encoding="utf-8") as f:
         fg_content = f.read()
 
     res = client.post("/api/v1/configurations/upload", json={
@@ -137,7 +146,7 @@ def test_fortinet_and_juniper_insecure_demo():
     assert any("FGT-" in f["rule_id"] for f in fg_findings)
 
     # Juniper
-    with open("sample_configs/juniper_insecure.conf", "r", encoding="utf-8") as f:
+    with open(SAMPLE_DIR / "juniper_insecure.conf", "r", encoding="utf-8") as f:
         jn_content = f.read()
 
     res = client.post("/api/v1/configurations/upload", json={
@@ -157,3 +166,5 @@ def test_fortinet_and_juniper_insecure_demo():
     assert res.status_code == 200
     jn_findings = res.json()
     assert any("JUNOS-" in f["rule_id"] for f in jn_findings)
+
+

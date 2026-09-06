@@ -1,5 +1,5 @@
-"""
-Security Posture Summary Endpoint — NEXORA SIH 2026
+﻿"""
+Security Posture Summary Endpoint â€” NEXORA SIH 2026
 Provides a single computed payload covering everything the Security Posture
 page needs. All values are derived from real database state. No fallback
 hardcoding. Empty/zero states are returned honestly when no data exists.
@@ -14,7 +14,7 @@ from backend.app.services.compliance.mapping_engine import ComplianceEngine
 
 router = APIRouter(prefix="/posture", tags=["Security Posture"])
 
-# Maps finding category → display label used in Control Health bars
+# Maps finding category â†’ display label used in Control Health bars
 CATEGORY_LABEL_MAP = {
     "Authentication":    "Authentication",
     "Network":           "Network Security",
@@ -24,7 +24,7 @@ CATEGORY_LABEL_MAP = {
     "Management":        "Management",
 }
 
-# Severity → maximum penalty score applied when computing control health
+# Severity â†’ maximum penalty score applied when computing control health
 SEVERITY_PENALTY = {
     "CRITICAL": 35,
     "HIGH":     20,
@@ -51,36 +51,36 @@ def _describe_event(event_type: str, payload: dict) -> str:
         vendor = payload.get("vendor", "Unknown")
         count  = payload.get("findings_count", 0)
         risk   = payload.get("risk_score", 0)
-        return f"{vendor} audit completed · {count} findings · Risk {risk}"
+        return f"{vendor} audit completed Â· {count} findings Â· Risk {risk}"
     if event_type == "AUDIT_STARTED":
         return "Configuration audit initialised"
     if event_type == "REMEDIATION_APPROVED":
         rule = payload.get("rule_id", "")
         reviewer = payload.get("reviewer", "Reviewer")
-        return f"Patch approved by {reviewer} · {rule}"
+        return f"Patch approved by {reviewer} Â· {rule}"
     if event_type == "REMEDIATION_REJECTED":
         rule = payload.get("rule_id", "")
         reviewer = payload.get("reviewer", "Reviewer")
-        return f"Patch rejected by {reviewer} · {rule}"
+        return f"Patch rejected by {reviewer} Â· {rule}"
     if event_type == "REMEDIATION_APPROVED_AND_SIMULATED":
-        return f"Sandbox simulation started · {payload.get('rule_id', '')}"
+        return f"Sandbox simulation started Â· {payload.get('rule_id', '')}"
     if event_type == "VERIFICATION_COMPLETED":
         passed = payload.get("verification_passed", False)
         before = payload.get("risk_before", 0)
         after  = payload.get("risk_after", 0)
         state  = "Passed" if passed else "Completed"
-        return f"Verification {state} · Risk {before} → {after}"
+        return f"Verification {state} Â· Risk {before} â†’ {after}"
     if event_type == "VERIFICATION_FAILED":
         rule = payload.get("target_rule", "")
-        return f"Verification failed · {rule} persists after patch"
+        return f"Verification failed Â· {rule} persists after patch"
     if event_type == "CONFIG_UPLOADED":
-        return f"Configuration uploaded · {payload.get('vendor', 'Unknown')}"
+        return f"Configuration uploaded Â· {payload.get('vendor', 'Unknown')}"
     return event_type.replace("_", " ").title()
 
 
 def _compute_control_health(findings: list) -> dict:
     """
-    Computes a 0–100 health score per security category.
+    Computes a 0â€“100 health score per security category.
     Starts at 100 and deducts a penalty for each open finding in that category.
     Score is clamped to 0. Higher = healthier.
     """
@@ -103,7 +103,7 @@ def _compute_control_health(findings: list) -> dict:
 
 def _compute_exposure_matrix(findings: list) -> dict:
     """
-    category × severity count grid.
+    category Ã— severity count grid.
     Only counts OPEN or REJECTED findings.
     """
     matrix: dict = {}
@@ -146,13 +146,13 @@ async def get_posture_summary(db: AsyncSession = Depends(get_db)):
     Every field is derived from DB state. Returns empty/zero honestly when no data.
     """
 
-    # ── 1. Load all non-verification audits ─────────────────────────────────
+    # â”€â”€ 1. Load all non-verification audits â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     audits_res = await db.execute(
         select(Audit).where(Audit.is_verification == False).order_by(Audit.created_at.asc())
     )
     audits = list(audits_res.scalars().all())
 
-    # ── 2. Load all findings across all non-verification audits ─────────────
+    # â”€â”€ 2. Load all findings across all non-verification audits â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     all_findings = []
     if audits:
         audit_ids = [a.id for a in audits]
@@ -161,9 +161,10 @@ async def get_posture_summary(db: AsyncSession = Depends(get_db)):
         )
         all_findings = list(findings_res.scalars().all())
 
-    open_findings = [f for f in all_findings if f.status in {"OPEN", "REJECTED"}]
+    open_findings = [f for f in all_findings if f.status in {"OPEN", "REJECTED"} and f.verdict != "UNRESOLVED"]
+    unresolved_count = sum(1 for f in all_findings if f.verdict == "UNRESOLVED")
 
-    # ── 3. KPI Aggregates ───────────────────────────────────────────────────
+    # â”€â”€ 3. KPI Aggregates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     total_open     = len(open_findings)
     critical_count = sum(1 for f in open_findings if f.severity == "CRITICAL")
     high_count     = sum(1 for f in open_findings if f.severity == "HIGH")
@@ -174,10 +175,10 @@ async def get_posture_summary(db: AsyncSession = Depends(get_db)):
     total_risk_sum = sum(f.risk_score or 0 for f in open_findings)
     global_risk_index = round(total_risk_sum / total_open) if total_open > 0 else 0
 
-    # ── 4. Control Health (per-category 0–100) ─────────────────────────────
+    # â”€â”€ 4. Control Health (per-category 0â€“100) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     control_health = _compute_control_health(all_findings)
 
-    # ── 5. Vendor Posture (per-vendor: risk, findings count, compliance %) ──
+    # â”€â”€ 5. Vendor Posture (per-vendor: risk, findings count, compliance %) â”€â”€
     vendor_posture: dict = {}
     for audit in audits:
         v = audit.vendor or "Unknown"
@@ -209,7 +210,7 @@ async def get_posture_summary(db: AsyncSession = Depends(get_db)):
             "avg_compliance_pct": avg_compliance,
         }
 
-    # ── 6. Framework Coverage ───────────────────────────────────────────────
+    # â”€â”€ 6. Framework Coverage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     findings_dicts = [
         {
             "id":               f.id,
@@ -228,10 +229,10 @@ async def get_posture_summary(db: AsyncSession = Depends(get_db)):
     }
     overall_compliance_pct = posture_data["overall_compliance_pct"]
 
-    # ── 7. Exposure Matrix ──────────────────────────────────────────────────
+    # â”€â”€ 7. Exposure Matrix â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     exposure_matrix = _compute_exposure_matrix(all_findings)
 
-    # ── 8. Audit Trend (real per-audit data only — never fabricated) ────────
+    # â”€â”€ 8. Audit Trend (real per-audit data only â€” never fabricated) â”€â”€â”€â”€â”€â”€â”€â”€
     audit_trend = [
         {
             "audit_id":        a.id,
@@ -245,10 +246,10 @@ async def get_posture_summary(db: AsyncSession = Depends(get_db)):
         for a in audits
     ]
 
-    # ── 9. Top Risk Contributors ────────────────────────────────────────────
+    # â”€â”€ 9. Top Risk Contributors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     top_contributors = _compute_top_contributors(all_findings, total_risk_sum, n=5)
 
-    # ── 10. Posture Activity Feed (from blockchain) ─────────────────────────
+    # â”€â”€ 10. Posture Activity Feed (from blockchain) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     blocks_res = await db.execute(
         select(BlockchainBlock).order_by(BlockchainBlock.block_index.desc()).limit(30)
     )
@@ -271,12 +272,13 @@ async def get_posture_summary(db: AsyncSession = Depends(get_db)):
         if len(activity_feed) >= 12:
             break
 
-    # ── Return complete posture payload ─────────────────────────────────────
+    # â”€â”€ Return complete posture payload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     return {
         # KPIs
         "global_risk_index":      global_risk_index,
         "overall_compliance_pct": overall_compliance_pct,
         "total_open_findings":    total_open,
+        "unresolved_count":       unresolved_count,
         "critical_count":         critical_count,
         "high_count":             high_count,
         "medium_count":           medium_count,
@@ -292,3 +294,4 @@ async def get_posture_summary(db: AsyncSession = Depends(get_db)):
         "top_contributors":  top_contributors,
         "posture_activity":  activity_feed,
     }
+

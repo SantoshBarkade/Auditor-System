@@ -20,7 +20,7 @@ AI is implemented strictly as an **assistive** and **explanatory** layer:
   "potential_impact": "...",
   "security_principle": "...",
   "recommended_action": "...",
-  "source": "Gemini Generative AI / Deterministic Fallback",
+  "source": "NVIDIA Generative AI (OpenAI-Compatible) / Deterministic Fallback",
   "confidence": "High"
 }
 ```
@@ -28,5 +28,5 @@ AI is implemented strictly as an **assistive** and **explanatory** layer:
 ---
 
 ## 3. Dual-Mode Fallback Engine
-- **Mode A (Zero-API Key Fallback):** If `GEMINI_API_KEY` is not present, NEXORA produces rich, deterministic, structured explanations built directly from validated cybersecurity definitions.
-- **Mode B (Gemini Generative AI):** If `GEMINI_API_KEY` is supplied, the application connects to the Gemini REST API (`gemini-1.5-flash`) with low temperature ($0.2$) for factual, grounded output.
+- **Mode A (Zero-API Key Fallback):** If `NVIDIA_API_KEY` is not present, NEXORA produces rich, deterministic, structured explanations built directly from validated cybersecurity definitions.
+- **Mode B (NVIDIA Generative AI (OpenAI-Compatible)):** If `NVIDIA_API_KEY` is supplied, the application connects to the NVIDIA AI REST API (`meta/llama-3.2-11b-vision-instruct`) with low temperature ($0.2$) for factual, grounded output.

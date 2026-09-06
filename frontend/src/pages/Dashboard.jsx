@@ -9,6 +9,7 @@ import {
   Shield,
   Clock,
   AlertTriangle,
+  HelpCircle,
   Loader2
 } from 'lucide-react';
 import { api } from '../services/api';
@@ -192,6 +193,47 @@ export default function Dashboard({ onSelectAudit, onNavigateTab }) {
                 <p className="text-xs text-slate-400 mt-1">Run a demo to populate</p>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* 5-CATEGORY FLOW METRIC CARDS */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 pt-8">
+          <div className="bg-white border border-slate-200 p-5 space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Configurations</span>
+            <p className="text-2xl font-bold font-mono text-slate-900">{summary?.total_configurations ?? 0}</p>
+            <span className="text-xs text-slate-500">Multi-Vendor Repos</span>
+          </div>
+
+          <div className="bg-white border border-slate-200 p-5 space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Audits</span>
+            <p className="text-2xl font-bold font-mono text-slate-900">{summary?.total_audits ?? 0}</p>
+            <span className="text-xs text-slate-500">Cryptographic Runs</span>
+          </div>
+
+          <div className="bg-white border border-slate-200 p-5 space-y-1">
+            <span className="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Violations (FAIL)</span>
+            <p className="text-2xl font-bold font-mono text-rose-600">{totalFindings}</p>
+            <span className="text-xs text-rose-600/70">Deterministic Findings</span>
+          </div>
+
+          <div 
+            onClick={() => onNavigateTab && onNavigateTab('unresolved')}
+            className="bg-white border border-amber-300 p-5 space-y-1 cursor-pointer hover:bg-amber-50/40 transition-colors group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Unresolved (Flow B)</span>
+              <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">RAG + Review</span>
+            </div>
+            <p className="text-2xl font-bold font-mono text-amber-700">{summary?.unresolved_count ?? 0}</p>
+            <span className="text-xs text-amber-700 font-semibold group-hover:underline flex items-center gap-1">
+              Inspect Cases <ArrowRight className="w-3 h-3" />
+            </span>
+          </div>
+
+          <div className="bg-white border border-slate-200 p-5 space-y-1">
+            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Blockchain Ledger</span>
+            <p className="text-2xl font-bold font-mono text-slate-900">{summary?.total_blockchain_blocks ?? 0}</p>
+            <span className="text-xs text-emerald-700 font-medium">SHA-256 Valid</span>
           </div>
         </div>
       </section>

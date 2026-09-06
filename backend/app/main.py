@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,6 +6,8 @@ from fastapi.responses import JSONResponse
 from backend.app.core.config import settings
 from backend.app.core.database import init_db
 from backend.app.api.routes import (
+    unresolved,
+    posture,
     health,
     configurations,
     audits,
@@ -32,7 +34,7 @@ app = FastAPI(
 # CORS configuration for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,9 +49,11 @@ app.include_router(findings.router, prefix=API_PREFIX)
 app.include_router(blockchain.router, prefix=API_PREFIX)
 app.include_router(reports.router, prefix=API_PREFIX)
 app.include_router(dashboard.router, prefix=API_PREFIX)
+
+app.include_router(unresolved.router, prefix=API_PREFIX)
 app.include_router(settings_route.router, prefix=API_PREFIX)
 
-# --- P0.3: Global exception handler — prevent stack trace leaks ---
+# --- P0.3: Global exception handler â€” prevent stack trace leaks ---
 logger = logging.getLogger(__name__)
 
 @app.exception_handler(Exception)
@@ -76,5 +80,10 @@ async def root():
     }
 
 if __name__ == "__main__":
+    import sys
+    import asyncio
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     import uvicorn
-    uvicorn.run("backend.app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("backend.app.main:app", host="127.0.0.1", port=8000, reload=False, loop="none")
+

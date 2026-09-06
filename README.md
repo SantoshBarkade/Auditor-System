@@ -63,7 +63,7 @@ Tamper-Evident SHA-256 Cryptographic Blockchain Audit Trail
    - Every event (Upload, Audit, Finding, Approval, Simulation, Verification) generates a SHA-256 block linked to the previous block hash.
    - Includes a live **Tamper Demonstration Engine** that proves detection of historical data tampering in real-time.
 5. **Zero-Crash AI Fallback:**
-   - The system functions 100% offline with a high-fidelity deterministic template explainer if a Google Gemini API key is absent.
+   - The system functions 100% offline with a high-fidelity deterministic template explainer if a NVIDIA API key is absent.
 
 ---
 

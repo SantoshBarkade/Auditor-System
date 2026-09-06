@@ -1,8 +1,11 @@
-import os
+﻿import os
 import json
-import httpx
+import logging
 from typing import Dict, Any, Optional
+from openai import AsyncOpenAI
 from backend.app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 class AIExplanationService:
     """
@@ -11,7 +14,7 @@ class AIExplanationService:
     Strict Invariant: AI NEVER modifies deterministic PASS/FAIL, evidence, or risk scores.
     Operates seamlessly in two modes:
     - Mode A: High-fidelity deterministic template generator (Default / Zero-API-key fallback).
-    - Mode B: Gemini Generative AI (active if GEMINI_API_KEY is configured).
+    - Mode B: NVIDIA Generative AI (active if NVIDIA_API_KEY is configured).
     """
 
     @classmethod
@@ -26,11 +29,11 @@ class AIExplanationService:
         remediation: str,
         is_unresolved: bool = False
     ) -> Dict[str, Any]:
-        api_key = settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
+        api_key = settings.NVIDIA_API_KEY or os.getenv("NVIDIA_API_KEY")
 
         if api_key:
             try:
-                gemini_result = await cls._call_gemini(
+                nvidia_result = await cls._call_nvidia(
                     api_key=api_key,
                     title=title,
                     vendor=vendor,
@@ -41,10 +44,10 @@ class AIExplanationService:
                     remediation=remediation,
                     is_unresolved=is_unresolved
                 )
-                if gemini_result:
-                    return gemini_result
+                if nvidia_result:
+                    return nvidia_result
             except Exception as e:
-                print(f"[AIExplanationService] Gemini error: {e}")
+                logger.error(f"[AIExplanationService] NVIDIA error: {e}")
                 pass
 
         # Fallback to deterministic explanation generator
@@ -94,7 +97,7 @@ class AIExplanationService:
         }
 
     @classmethod
-    async def _call_gemini(
+    async def _call_nvidia(
         cls,
         api_key: str,
         title: str,
@@ -106,7 +109,7 @@ class AIExplanationService:
         remediation: str,
         is_unresolved: bool
     ) -> Optional[Dict[str, Any]]:
-        """Call Gemini REST API for contextual natural language assistance."""
+        """Call NVIDIA OpenAI-compatible API for contextual natural language assistance."""
         prompt = f"""You are NEXORA AI, a senior network security auditor.
 Explain this security audit finding based strictly on the provided evidence.
 
@@ -126,39 +129,30 @@ Provide a structured JSON response with these exact keys:
   "potential_impact": "Operational and security consequences if exploited",
   "security_principle": "Underlying cybersecurity principle (e.g., Least Privilege, Defense-in-Depth)",
   "recommended_action": "Clear technical recommendation for network engineer",
-  "source": "Gemini Generative AI",
+  "source": "NVIDIA Generative AI",
   "confidence": "High"
 }}
 Respond ONLY with the JSON object. Do not include markdown code block backticks.
 """
-
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.GEMINI_MODEL}:generateContent?key={api_key}"
-        headers = {"Content-Type": "application/json"}
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 800}
-        }
-
-        async with httpx.AsyncClient(timeout=25.0) as client:
-            resp = await client.post(url, headers=headers, json=payload)
-            if resp.status_code == 200:
-                data = resp.json()
-                candidates = data.get("candidates", [])
-                if not candidates:
-                    return None
-                parts = candidates[0].get("content", {}).get("parts", [])
-                full_text = ""
-                for p in parts:
-                    if "text" in p and not p.get("thought", False):
-                        full_text += p["text"]
-                if not full_text and parts:
-                    full_text = parts[-1].get("text", "")
-
-                start = full_text.find("{")
-                end = full_text.rfind("}")
-                if start != -1 and end != -1:
-                    json_str = full_text[start:end+1]
-                    return json.loads(json_str)
-            else:
-                print(f"[AIExplanationService] Gemini API returned HTTP {resp.status_code}: {resp.text}")
-        return None
+        client = AsyncOpenAI(
+            base_url=settings.NVIDIA_BASE_URL,
+            api_key=api_key,
+            timeout=25.0
+        )
+        try:
+            response = await client.chat.completions.create(
+                model=settings.NVIDIA_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=800
+            )
+            text = response.choices[0].message.content.strip()
+            if text.startswith("```json"):
+                text = text[7:-3].strip()
+            elif text.startswith("```"):
+                text = text[3:-3].strip()
+            
+            return json.loads(text)
+        except Exception as e:
+            logger.error(f"[AIExplanationService] AsyncOpenAI call failed: {e}")
+            return None

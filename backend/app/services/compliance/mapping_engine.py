@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+﻿from typing import List, Dict, Any
 
 class ComplianceEngine:
     """
@@ -66,7 +66,19 @@ class ComplianceEngine:
         If a control is violated by an open finding, status is GAP.
         Once remediated, control status flips to SATISFIED.
         """
-        open_findings = [f for f in findings if f.get("status") in ["OPEN", "PENDING_APPROVAL", "REJECTED"]]
+        # INVARIANT: UNRESOLVED verdict != compliance GAP.
+        # A finding with verdict==UNRESOLVED means the deterministic engine could not
+        # establish the security meaning - it is NOT a confirmed violation.
+        # These are counted separately and must NOT inflate the GAP count.
+        open_findings = [
+            f for f in findings
+            if f.get("status") in ["OPEN", "PENDING_APPROVAL", "REJECTED"]
+            and f.get("verdict", "FAIL") != "UNRESOLVED"
+        ]
+        unresolved_findings = [
+            f for f in findings
+            if f.get("verdict", "") == "UNRESOLVED"
+        ]
         
         # Collect all violated control IDs
         gaps_by_framework: Dict[str, List[Dict[str, Any]]] = {fw: [] for fw in cls.FRAMEWORKS}
@@ -113,5 +125,7 @@ class ComplianceEngine:
 
         return {
             "overall_compliance_pct": overall_pct,
+            "unresolved_count": len(unresolved_findings),
             "frameworks": posture
         }
+

@@ -7,13 +7,12 @@ before each test session so schema changes are always reflected.
 import asyncio
 import os
 import sys
-
 import pytest
 
 # Ensure backend package is importable
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-# ── Override DATABASE_URL BEFORE any app modules are imported ──
+# Override DATABASE_URL BEFORE any app modules are imported
 _TEST_DB_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../backend"))
 _TEST_DB_PATH = os.path.join(_TEST_DB_DIR, "nexora_test.db")
 
@@ -27,10 +26,7 @@ def fresh_test_database():
     """
     Session-scoped autouse fixture.
     Deletes and recreates the test DB at the start of each pytest session.
-    This guarantees all current model columns (sha256_hash, verdict, etc.)
-    are present.
     """
-    # Remove stale test DB
     if os.path.exists(_TEST_DB_PATH):
         try:
             os.remove(_TEST_DB_PATH)
@@ -38,7 +34,6 @@ def fresh_test_database():
         except PermissionError:
             print(f"\n[conftest] WARNING: Could not remove {_TEST_DB_PATH} — it may be in use.")
 
-    # Import database module AFTER env var is set so it picks up the test URL
     from backend.app.core.database import init_db
 
     loop = asyncio.new_event_loop()
@@ -48,4 +43,10 @@ def fresh_test_database():
 
     yield
 
-    # Leave test DB for inspection after run (don't delete)
+
+@pytest.fixture
+async def async_session():
+    """Provides an isolated AsyncSession for test functions."""
+    from backend.app.core.database import AsyncSessionLocal
+    async with AsyncSessionLocal() as session:
+        yield session

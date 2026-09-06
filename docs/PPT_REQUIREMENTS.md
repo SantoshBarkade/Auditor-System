@@ -74,4 +74,4 @@ NEXORA bridges multi-vendor network security by ingesting heterogeneous device c
    - Every significant action (upload, audit, finding, approval, simulation, verification) generates a SHA-256 block linked to the previous block hash.
    - Blockchain integrity is verifiable at any time by the user.
 5. **Deterministic AI Fallback:**
-   - If an external LLM API key (e.g., Gemini API) is not configured, NEXORA seamlessly falls back to a deterministic, template-based RAG explanation generator. The application will never crash due to a missing API key.
+   - If an external LLM API key (e.g., NVIDIA API) is not configured, NEXORA seamlessly falls back to a deterministic, template-based RAG explanation generator. The application will never crash due to a missing API key.
