@@ -1,4 +1,15 @@
-﻿import logging
+import sys
+import os
+
+# Guarantee project root and backend are on sys.path in all runtime environments (e.g. Vercel Serverless / Services)
+_app_dir = os.path.dirname(os.path.abspath(__file__))
+_backend_dir = os.path.dirname(_app_dir)
+_proj_root = os.path.dirname(_backend_dir)
+for _p in (_proj_root, _backend_dir):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
