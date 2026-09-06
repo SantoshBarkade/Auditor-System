@@ -1,31 +1,84 @@
-const API_BASE = '/api/v1';
+﻿// Production-safe Environment-based API Configuration
+const rawApiUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || '';
+const API_ROOT = rawApiUrl.replace(/\/+$/, '');
+export const API_BASE = API_ROOT ? `${API_ROOT}/api/v1` : '/api/v1';
+
+export class ApiError extends Error {
+  constructor(message, status = 500, data = null) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.data = data;
+    this.isNetworkError = status === 0;
+    this.isNotFound = status === 404;
+    this.isUnauthorized = status === 401;
+    this.isForbidden = status === 403;
+    this.isClientError = status >= 400 && status < 500;
+    this.isServerError = status >= 500;
+  }
+}
+
+async function request(endpoint, options = {}) {
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = `${API_BASE}${cleanEndpoint}`;
+  const headers = { ...(options.headers || {}) };
+
+  // Set Content-Type for JSON payloads unless FormData
+  if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  let res;
+  try {
+    res = await fetch(url, { ...options, headers });
+  } catch (networkErr) {
+    throw new ApiError(
+      `Network error connecting to NEXORA backend (${url}). Please check your connection.`,
+      0,
+      networkErr
+    );
+  }
+
+  let responseData = null;
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    try {
+      responseData = await res.json();
+    } catch {
+      responseData = null;
+    }
+  } else {
+    responseData = await res.text();
+  }
+
+  if (!res.ok) {
+    let errorMessage = `Request to ${cleanEndpoint} failed with status ${res.status}`;
+    if (responseData && typeof responseData === 'object') {
+      errorMessage = responseData.detail || responseData.message || errorMessage;
+    } else if (typeof responseData === 'string' && responseData.length > 0 && responseData.length < 250) {
+      errorMessage = responseData;
+    }
+    throw new ApiError(errorMessage, res.status, responseData);
+  }
+
+  return responseData;
+}
 
 export const api = {
   // Health
-  getHealth: async () => {
-    const res = await fetch(`${API_BASE}/health`);
-    return res.json();
-  },
+  getHealth: async () => request('/health'),
 
-  // Dashboard
-  getDashboardSummary: async () => {
-    const res = await fetch(`${API_BASE}/dashboard/summary`);
-    return res.json();
-  },
-
-  runVendorDemo: async (vendor) => {
-    const res = await fetch(`${API_BASE}/dashboard/demo/${vendor}`, { method: 'POST' });
-    return res.json();
-  },
+  // Dashboard & Posture
+  getDashboardSummary: async () => request('/dashboard/summary'),
+  getPostureSummary: async () => request('/posture/summary'),
+  runVendorDemo: async (vendor) => request(`/dashboard/demo/${vendor}`, { method: 'POST' }),
 
   // Configurations
   detectVendor: async (raw_content, filename) => {
-    const res = await fetch(`${API_BASE}/configurations/detect-vendor`, {
+    return request('/configurations/detect-vendor', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ raw_content, filename })
     });
-    return res.json();
   },
 
   uploadConfiguration: async (raw_content, filename, vendor) => {
@@ -34,126 +87,72 @@ export const api = {
     formData.append('filename', filename);
     if (vendor) formData.append('vendor', vendor);
 
-    const res = await fetch(`${API_BASE}/configurations/upload`, {
+    return request('/configurations/upload', {
       method: 'POST',
       body: formData
     });
-    return res.json();
   },
 
-  getConfigurations: async () => {
-    const res = await fetch(`${API_BASE}/configurations`);
-    return res.json();
-  },
-
-  getConfiguration: async (id) => {
-    const res = await fetch(`${API_BASE}/configurations/${id}`);
-    return res.json();
-  },
-
-  getNormalizedConfiguration: async (id) => {
-    const res = await fetch(`${API_BASE}/configurations/${id}/normalized`);
-    return res.json();
-  },
-
-  getSampleConfigsList: async () => {
-    const res = await fetch(`${API_BASE}/configurations/samples/list`);
-    return res.json();
-  },
-
-  loadSampleConfig: async (filename) => {
-    const res = await fetch(`${API_BASE}/configurations/samples/load/${filename}`);
-    return res.json();
-  },
+  getConfigurations: async () => request('/configurations'),
+  getConfiguration: async (id) => request(`/configurations/${id}`),
+  getNormalizedConfiguration: async (id) => request(`/configurations/${id}/normalized`),
+  getSampleConfigsList: async () => request('/configurations/samples/list'),
+  loadSampleConfig: async (filename) => request(`/configurations/samples/load/${encodeURIComponent(filename)}`),
 
   // Audits
   runAudit: async (configuration_id) => {
-    const res = await fetch(`${API_BASE}/audits/run`, {
+    return request('/audits/run', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ configuration_id })
     });
-    return res.json();
   },
 
-  getAudits: async () => {
-    const res = await fetch(`${API_BASE}/audits`);
-    return res.json();
-  },
-
-  getAudit: async (id) => {
-    const res = await fetch(`${API_BASE}/audits/${id}`);
-    return res.json();
-  },
-
-  getAuditFindings: async (audit_id) => {
-    const res = await fetch(`${API_BASE}/audits/${audit_id}/findings`);
-    return res.json();
-  },
-
-  getAuditCompliancePosture: async (audit_id) => {
-    const res = await fetch(`${API_BASE}/audits/${audit_id}/compliance-posture`);
-    return res.json();
-  },
+  getAudits: async () => request('/audits'),
+  getAudit: async (id) => request(`/audits/${id}`),
+  getAuditFindings: async (audit_id) => request(`/audits/${audit_id}/findings`),
+  getAuditCompliancePosture: async (audit_id) => request(`/audits/${audit_id}/compliance-posture`),
 
   // Findings
-  getFinding: async (id) => {
-    const res = await fetch(`${API_BASE}/findings/${id}`);
-    return res.json();
+  getFindings: async (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.audit_id) searchParams.set('audit_id', params.audit_id);
+    if (params.severity) searchParams.set('severity', params.severity);
+    if (params.status) searchParams.set('status', params.status);
+    if (params.vendor) searchParams.set('vendor', params.vendor);
+    if (params.limit) searchParams.set('limit', params.limit);
+    const qs = searchParams.toString();
+    return request(`/findings${qs ? `?${qs}` : ''}`);
   },
-
-  getFindingEvidence: async (id) => {
-    const res = await fetch(`${API_BASE}/findings/${id}/evidence`);
-    return res.json();
-  },
-
-  triggerAIExplain: async (id) => {
-    const res = await fetch(`${API_BASE}/findings/${id}/ai-explain`, { method: 'POST' });
-    return res.json();
-  },
+  getFinding: async (id) => request(`/findings/${id}`),
+  getFindingEvidence: async (id) => request(`/findings/${id}/evidence`),
+  getFindingPipeline: async (id) => request(`/findings/${id}/pipeline`),
+  triggerAIExplain: async (id) => request(`/findings/${id}/ai-explain`, { method: 'POST' }),
 
   approveRemediation: async (id, reviewer, note) => {
-    const res = await fetch(`${API_BASE}/findings/${id}/approve`, {
+    return request(`/findings/${id}/approve`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reviewer, note })
     });
-    return res.json();
   },
 
   rejectRemediation: async (id, reviewer, note) => {
-    const res = await fetch(`${API_BASE}/findings/${id}/reject`, {
+    return request(`/findings/${id}/reject`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reviewer, note })
     });
-    return res.json();
   },
 
   simulateRemediation: async (id, reviewer = 'Security Administrator') => {
     const params = new URLSearchParams({ reviewer });
-    const res = await fetch(`${API_BASE}/findings/${id}/simulate-remediation?${params}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+    return request(`/findings/${id}/simulate-remediation?${params.toString()}`, {
+      method: 'POST'
     });
-    return res.json();
   },
 
   // Blockchain
-  getBlockchain: async () => {
-    const res = await fetch(`${API_BASE}/blockchain`);
-    return res.json();
-  },
-
-  verifyBlockchain: async () => {
-    const res = await fetch(`${API_BASE}/blockchain/verify`, { method: 'POST' });
-    return res.json();
-  },
-
-  tamperTestBlockchain: async () => {
-    const res = await fetch(`${API_BASE}/blockchain/tamper-test`, { method: 'POST' });
-    return res.json();
-  },
+  getBlockchain: async () => request('/blockchain'),
+  verifyBlockchain: async () => request('/blockchain/verify', { method: 'POST' }),
+  tamperTestBlockchain: async () => request('/blockchain/tamper-test', { method: 'POST' }),
 
   // Reports
   getReportPdfUrl: (auditId) => `${API_BASE}/reports/${auditId}/pdf`,
@@ -161,106 +160,63 @@ export const api = {
   getReportJsonUrl: (auditId) => `${API_BASE}/reports/${auditId}/json`,
 
   // Settings
-  getSettings: async () => {
-    const res = await fetch(`${API_BASE}/settings`);
-    return res.json();
-  },
-
-  updateAISettings: async (api_key, model) => {
-    const res = await fetch(`${API_BASE}/settings/ai`, {
+  getSettings: async () => request('/settings'),
+  updateAISettings: async (api_key, model, adminToken = 'dev-token-change-in-prod') => {
+    return request('/settings/ai', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'x-admin-token': adminToken
+      },
       body: JSON.stringify({ api_key, model })
     });
-    return res.json();
   },
 
-  // Unresolved Cases (Grounded in /api/v1/unresolved/audit/{id} and /api/v1/unresolved/{id})
+  // Unresolved Cases - single efficient backend endpoint calls
   getUnresolvedCases: async (params = {}) => {
-    try {
-      if (params.audit_id) {
-        const res = await fetch(`${API_BASE}/unresolved/audit/${params.audit_id}`);
-        if (res.ok) return await res.json();
-      }
-      const auditsRes = await fetch(`${API_BASE}/audits`);
-      if (auditsRes.ok) {
-        const audits = await auditsRes.json();
-        let allCases = [];
-        for (const a of audits.slice(0, 10)) {
-          const cRes = await fetch(`${API_BASE}/unresolved/audit/${a.id}`);
-          if (cRes.ok) {
-            const cases = await cRes.json();
-            allCases = allCases.concat(cases);
-          }
-        }
-        if (allCases.length > 0) return allCases;
-      }
-    } catch (e) {
-      console.warn('Failed to fetch unresolved cases', e);
-    }
-    return [];
+    const searchParams = new URLSearchParams();
+    if (params.audit_id) searchParams.set('audit_id', params.audit_id);
+    if (params.status) searchParams.set('status', params.status);
+    if (params.vendor) searchParams.set('vendor', params.vendor);
+    if (params.limit) searchParams.set('limit', params.limit);
+    if (params.skip) searchParams.set('skip', params.skip);
+    const qs = searchParams.toString();
+    return request(`/unresolved${qs ? `?${qs}` : ''}`);
   },
 
   getUnresolvedStats: async () => {
-    try {
-      const cases = await api.getUnresolvedCases();
-      const open = cases.filter(c => c.status === 'OPEN').length;
-      const awaiting_review = cases.filter(c => c.status === 'AWAITING_REVIEW' || c.status === 'ANALYZING').length;
-      const resolved = cases.filter(c => c.status === 'RESOLVED' || c.status === 'CONFIRMED_SAFE' || c.status === 'CONFIRMED_VIOLATION').length;
-      return { total: cases.length, open, awaiting_review, resolved };
-    } catch (e) {
-      return { total: 0, open: 0, awaiting_review: 0, resolved: 0 };
-    }
-  },
-  getUnresolvedCase: async (id) => {
-    const res = await fetch(`${API_BASE}/unresolved/${id}`);
-    return res.json();
+    return request('/unresolved/stats/summary');
   },
 
-  getUnresolvedHistory: async (id) => {
-    const res = await fetch(`${API_BASE}/unresolved/${id}/history`);
-    return res.json();
-  },
+  getUnresolvedCase: async (id) => request(`/unresolved/${id}`),
+  getUnresolvedHistory: async (id) => request(`/unresolved/${id}/history`),
 
   triggerAIInvestigation: async (id, actor = 'Security Analyst') => {
-    const res = await fetch(`${API_BASE}/unresolved/${id}/analyze`, {
+    return request(`/unresolved/${id}/analyze`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ actor })
     });
-    return res.json();
   },
 
   submitCaseReview: async (id, reviewer, notes, additional_context = null) => {
-    const res = await fetch(`${API_BASE}/unresolved/${id}/review`, {
+    return request(`/unresolved/${id}/review`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reviewer, notes, additional_context })
     });
-    return res.json();
   },
 
   resolveCase: async (id, reviewer, final_verdict, resolution_context, resolution_evidence = {}) => {
-    const res = await fetch(`${API_BASE}/unresolved/${id}/resolve`, {
+    return request(`/unresolved/${id}/resolve`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reviewer, final_verdict, resolution_context, resolution_evidence })
     });
-    return res.json();
   },
 
   rejectCase: async (id, reviewer, reason) => {
-    const res = await fetch(`${API_BASE}/unresolved/${id}/reject`, {
+    return request(`/unresolved/${id}/reject`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reviewer, reason })
     });
-    return res.json();
   },
 
-  // Semantic Convergence Demo
-  getConvergenceDemo: async () => {
-    const res = await fetch(`${API_BASE}/configurations/convergence/demo`);
-    return res.json();
-  },
+  getConvergenceDemo: async () => request('/configurations/convergence/demo')
 };

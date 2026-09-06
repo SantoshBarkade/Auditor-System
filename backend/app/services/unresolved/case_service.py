@@ -12,6 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.models.unresolved import UnresolvedCase, UnresolvedStatus, FinalVerdict
+from backend.app.models.models import Audit, Finding
+from backend.app.services.compliance.mapping_engine import ComplianceEngine
 from backend.app.services.unresolved.lifecycle import UnresolvedLifecycle
 from backend.app.services.unresolved.ai_investigator import AIInvestigator
 from backend.app.services.rag.retriever import RAGRetriever
@@ -171,18 +173,66 @@ class CaseService:
             evidence=resolution_evidence
         )
         
+        # Synchronize associated Finding authoritative state
+        if case.finding_id:
+            finding_res = await session.execute(
+                select(Finding).where(Finding.id == case.finding_id)
+            )
+            finding = finding_res.scalar_one_or_none()
+            if finding:
+                if verdict in {FinalVerdict.CONFIRMED_SAFE, FinalVerdict.RESOLVED_WITH_CONTEXT}:
+                    finding.verdict = "PASS"
+                    finding.status = "VERIFIED"
+                elif verdict == FinalVerdict.CONFIRMED_VIOLATION:
+                    finding.verdict = "FAIL"
+                    finding.status = "OPEN"
+                elif verdict == FinalVerdict.CANNOT_RESOLVE:
+                    finding.verdict = "UNRESOLVED"
+                    finding.status = "OPEN"
+
+        # Recalculate parent Audit compliance score using deterministic compliance engine
+        recalculated_score = None
+        if case.audit_id:
+            audit_res = await session.execute(
+                select(Audit).where(Audit.id == case.audit_id)
+            )
+            audit = audit_res.scalar_one_or_none()
+            if audit:
+                all_findings_res = await session.execute(
+                    select(Finding).where(Finding.audit_id == case.audit_id)
+                )
+                findings_records = all_findings_res.scalars().all()
+                findings_dicts = [
+                    {
+                        "id": f.id,
+                        "rule_id": f.rule_id,
+                        "title": f.title,
+                        "severity": f.severity,
+                        "status": f.status,
+                        "verdict": f.verdict,
+                        "compliance_mappings": f.compliance_mappings or []
+                    }
+                    for f in findings_records
+                ]
+                posture = ComplianceEngine.evaluate_posture(findings_dicts)
+                audit.compliance_score = posture["overall_compliance_pct"]
+                recalculated_score = audit.compliance_score
+
         # Log resolution to blockchain
         await BlockchainLedger.append_event(
             event_type="UNRESOLVED_CASE_RESOLVED",
             event_data={
                 "case_id": case.id,
                 "audit_id": case.audit_id,
+                "finding_id": case.finding_id,
                 "verdict": verdict,
+                "new_compliance_score": recalculated_score,
                 "reviewer": reviewer,
                 "resolution_context": resolution_context
             },
             actor=reviewer,
-            audit_id=case.audit_id
+            audit_id=case.audit_id,
+            session=session
         )
 
         await session.commit()

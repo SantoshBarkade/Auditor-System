@@ -1,4 +1,5 @@
 import os
+import io
 import asyncio
 import datetime
 from reportlab.lib.pagesizes import letter
@@ -12,16 +13,14 @@ class PDFReportGenerator:
     Executive & Technical PDF Report Generator for NEXORA.
     Produces professional compliance audit reports with branding, metrics,
     findings breakdown, and blockchain verification certificates.
+    Supports in-memory binary generation for stateless cloud/serverless deployments.
     """
 
     @classmethod
-    def generate_report(cls, audit_data: dict, findings: list, blockchain_status: dict) -> str:
-        timestamp_str = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        filename = f"NEXORA_Audit_Report_Audit_{audit_data['id']}_{timestamp_str}.pdf"
-        file_path = os.path.join(settings.REPORTS_DIR, filename)
-
+    def generate_report_bytes(cls, audit_data: dict, findings: list, blockchain_status: dict) -> bytes:
+        buffer = io.BytesIO()
         doc = SimpleDocTemplate(
-            file_path,
+            buffer,
             pagesize=letter,
             rightMargin=36,
             leftMargin=36,
@@ -30,7 +29,7 @@ class PDFReportGenerator:
         )
 
         styles = getSampleStyleSheet()
-        
+
         # Custom styles
         title_style = ParagraphStyle(
             'ReportTitle',
@@ -73,25 +72,26 @@ class PDFReportGenerator:
         )
         badge_crit = ParagraphStyle('BadgeCrit', parent=table_cell, textColor=colors.HexColor('#E11D48'), fontName="Helvetica-Bold")
         badge_high = ParagraphStyle('BadgeHigh', parent=table_cell, textColor=colors.HexColor('#EA580C'), fontName="Helvetica-Bold")
-        badge_med = ParagraphStyle('BadgeMed', parent=table_cell, textColor=colors.HexColor('#D97706'), fontName="Helvetica-Bold")
+        badge_med  = ParagraphStyle('BadgeMed', parent=table_cell, textColor=colors.HexColor('#D97706'), fontName="Helvetica-Bold")
 
         story = []
 
-        # 1. Header & Branding
+        # 1. Header & Title Banner
         story.append(Paragraph("NEXORA", title_style))
         story.append(Paragraph("AI-Driven Multi-Vendor Network Security Compliance Auditor | Smart India Hackathon 2026 (SIH26155)", subtitle_style))
-        story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#38BDF8'), spaceAfter=14))
+        story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#0284C7'), spaceBefore=0, spaceAfter=14))
 
         # 2. Audit Metadata Summary Table
         risk_score = audit_data.get('risk_score', 0) or 0
         risk_color = '#E11D48' if risk_score >= 70 else '#D97706' if risk_score >= 45 else '#10B981'
+        now_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         meta_data = [
             [
                 Paragraph("<b>Audit ID:</b>", table_cell), Paragraph(str(audit_data.get('id', 'N/A')), table_cell),
                 Paragraph("<b>Vendor Platform:</b>", table_cell), Paragraph(str(audit_data.get('vendor', 'N/A')), table_cell)
             ],
             [
-                Paragraph("<b>Audit Date:</b>", table_cell), Paragraph(datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"), table_cell),
+                Paragraph("<b>Audit Date:</b>", table_cell), Paragraph(now_utc, table_cell),
                 Paragraph("<b>Risk Score:</b>", table_cell), Paragraph(f"<font color='{risk_color}'><b>{risk_score}/100</b></font>", table_cell)
             ],
             [
@@ -154,35 +154,44 @@ class PDFReportGenerator:
             ]
         ]
 
-        for f in findings:
-            sev = f.get('severity') or 'INFO'
-            s_style = badge_crit if sev == "CRITICAL" else badge_high if sev == "HIGH" else badge_med
-            lines_str = ", ".join(map(str, f.get('line_numbers') or [])) or "N/A"
-            
-            # Safely get and sanitize evidence and impact — guard against None
-            evidence_raw = (f.get('evidence') or 'N/A')
-            # Strip characters that conflict with ReportLab XML markup
-            evidence_safe = evidence_raw.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')[:200]
-            
-            impact_raw = (f.get('impact') or 'No impact description available.')
-            impact_safe = impact_raw.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')[:150]
-            
-            rule_id_safe = (f.get('rule_id') or 'N/A').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-            title_safe = (f.get('title') or 'Untitled').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-            status_safe = (f.get('status') or 'OPEN').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-
-            # Use font name="Courier" for monospace — <code> is NOT valid ReportLab markup
-            evidence_cell = f'<font name="Courier" size="7">{evidence_safe}</font><br/><font color="#64748B" size="7">{impact_safe}...</font>'
-
+        if not findings:
             findings_table_data.append([
-                Paragraph(sev, s_style),
-                Paragraph(f"<b>{rule_id_safe}</b><br/>{title_safe}", table_cell),
-                Paragraph(lines_str, table_cell),
-                Paragraph(evidence_cell, table_cell),
-                Paragraph(f"<b>{status_safe}</b>", table_cell)
+                Paragraph("INFO", badge_med),
+                Paragraph("<b>NO_FINDINGS</b><br/>No compliance vulnerabilities detected.", table_cell),
+                Paragraph("—", table_cell),
+                Paragraph("Configuration satisfies evaluated baseline controls.", table_cell),
+                Paragraph("<b>PASS</b>", table_cell)
             ])
+        else:
+            for f in findings:
+                sev = f.get('severity') or 'INFO'
+                s_style = badge_crit if sev == "CRITICAL" else badge_high if sev == "HIGH" else badge_med
+                lines_str = ", ".join(map(str, f.get('line_numbers') or [])) or "N/A"
 
-        findings_table = Table(findings_table_data, colWidths=[55, 145, 45, 235, 60])
+                # Safely get and sanitize evidence and impact — guard against None
+                evidence_raw = str(f.get('evidence') or 'N/A')
+                # Strip characters that conflict with ReportLab XML markup
+                evidence_safe = evidence_raw.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')[:200]
+
+                impact_raw = str(f.get('impact') or 'No impact description available.')
+                impact_safe = impact_raw.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')[:150]
+
+                rule_id_safe = str(f.get('rule_id') or 'N/A').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                title_safe = str(f.get('title') or 'Untitled').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                status_safe = str(f.get('status') or 'OPEN').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+                # Use font name="Courier" for monospace — <code> is NOT valid ReportLab markup
+                evidence_cell = f'<font name="Courier" size="7">{evidence_safe}</font><br/><font color="#64748B" size="7">{impact_safe}...</font>'
+
+                findings_table_data.append([
+                    Paragraph(sev, s_style),
+                    Paragraph(f"<b>{rule_id_safe}</b><br/>{title_safe}", table_cell),
+                    Paragraph(lines_str, table_cell),
+                    Paragraph(evidence_cell, table_cell),
+                    Paragraph(f"<b>{status_safe}</b>", table_cell)
+                ])
+
+        findings_table = Table(findings_table_data, colWidths=[55, 145, 45, 235, 60], repeatRows=1)
         findings_table.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#F1F5F9')),
             ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#CBD5E1')),
@@ -214,9 +223,27 @@ class PDFReportGenerator:
         story.append(chain_table)
 
         doc.build(story)
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        return pdf_bytes
+
+    @classmethod
+    def generate_report(cls, audit_data: dict, findings: list, blockchain_status: dict) -> str:
+        """Legacy helper: saves report to disk if needed and returns file path."""
+        pdf_bytes = cls.generate_report_bytes(audit_data, findings, blockchain_status)
+        timestamp_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d_%H%M%S")
+        filename = f"NEXORA_Audit_Report_Audit_{audit_data.get('id', 'N_A')}_{timestamp_str}.pdf"
+        file_path = os.path.join(settings.REPORTS_DIR, filename)
+        with open(file_path, "wb") as f:
+            f.write(pdf_bytes)
         return file_path
 
     @classmethod
     async def generate_report_async(cls, audit_data: dict, findings: list, blockchain_status: dict) -> str:
-        """Run the synchronous PDF generation off the event loop thread."""
+        """Run legacy synchronous PDF generation off the event loop thread."""
         return await asyncio.to_thread(cls.generate_report, audit_data, findings, blockchain_status)
+
+    @classmethod
+    async def generate_report_bytes_async(cls, audit_data: dict, findings: list, blockchain_status: dict) -> bytes:
+        """Run in-memory PDF generation asynchronously without blocking."""
+        return await asyncio.to_thread(cls.generate_report_bytes, audit_data, findings, blockchain_status)

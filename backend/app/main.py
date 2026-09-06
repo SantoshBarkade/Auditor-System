@@ -20,21 +20,22 @@ from backend.app.api.routes import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize SQLite tables on startup
+    # Initialize database tables on startup
     await init_db()
     yield
 
 app = FastAPI(
     title="NEXORA Backend API",
     description="AI-Driven Multi-Vendor Network Security Compliance Auditor for SIH 2026 (SIH26155)",
-    version="1.0.0-prototype",
+    version=settings.VERSION,
     lifespan=lifespan
 )
 
-# CORS configuration for React frontend
+# CORS configuration for React frontend: supports localhost + Vercel deployment domains
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
+    allow_origin_regex=settings.CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,14 +47,14 @@ app.include_router(health.router, prefix=API_PREFIX)
 app.include_router(configurations.router, prefix=API_PREFIX)
 app.include_router(audits.router, prefix=API_PREFIX)
 app.include_router(findings.router, prefix=API_PREFIX)
+app.include_router(posture.router, prefix=API_PREFIX)
 app.include_router(blockchain.router, prefix=API_PREFIX)
 app.include_router(reports.router, prefix=API_PREFIX)
 app.include_router(dashboard.router, prefix=API_PREFIX)
-
 app.include_router(unresolved.router, prefix=API_PREFIX)
 app.include_router(settings_route.router, prefix=API_PREFIX)
 
-# --- P0.3: Global exception handler â€” prevent stack trace leaks ---
+# Global exception handler - prevent stack trace leaks in production
 logger = logging.getLogger(__name__)
 
 @app.exception_handler(Exception)
@@ -86,4 +87,3 @@ if __name__ == "__main__":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     import uvicorn
     uvicorn.run("backend.app.main:app", host="127.0.0.1", port=8000, reload=False, loop="none")
-

@@ -25,6 +25,13 @@
     --color-na: #64748B;
   }
 
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
   html {
     /* Standard comfortable base font-size for high readability */
     font-size: 16px;

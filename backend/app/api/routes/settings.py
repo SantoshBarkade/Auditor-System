@@ -1,4 +1,5 @@
-import os
+﻿import os
+import hmac
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 from backend.app.core.config import settings
@@ -45,46 +46,23 @@ async def update_ai_settings(
     req: AISettingsUpdate,
     x_admin_token: str = Header(None)
 ):
-    if x_admin_token != settings.ADMIN_TOKEN:
+    # Constant-time comparison to prevent timing attacks
+    expected_token = settings.ADMIN_TOKEN or ""
+    if not x_admin_token or not hmac.compare_digest(x_admin_token, expected_token):
         raise HTTPException(status_code=401, detail="Invalid admin token")
 
     new_key = req.api_key.strip()
     new_model = req.model.strip()
 
+    # Update in-memory runtime settings cleanly (never write to disk .env at runtime)
     settings.NVIDIA_API_KEY = new_key
     settings.NVIDIA_MODEL = new_model
     os.environ["NVIDIA_API_KEY"] = new_key
     os.environ["NVIDIA_MODEL"] = new_model
 
-    # Persist into .env if present
-    env_file = getattr(settings.Config, "env_file", None)
-    if env_file and os.path.exists(env_file):
-        try:
-            with open(env_file, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-            updated = []
-            found_key, found_model = False, False
-            for l in lines:
-                if l.startswith("NVIDIA_API_KEY="):
-                    updated.append(f'NVIDIA_API_KEY="{new_key}"\n')
-                    found_key = True
-                elif l.startswith("NVIDIA_MODEL="):
-                    updated.append(f'NVIDIA_MODEL="{new_model}"\n')
-                    found_model = True
-                else:
-                    updated.append(l)
-            if not found_key:
-                updated.append(f'NVIDIA_API_KEY="{new_key}"\n')
-            if not found_model:
-                updated.append(f'NVIDIA_MODEL="{new_model}"\n')
-            with open(env_file, "w", encoding="utf-8") as f:
-                f.writelines(updated)
-        except Exception:
-            pass
-
     return {
         "status": "success",
-        "message": "NVIDIA AI settings updated successfully",
+        "message": "NVIDIA AI runtime settings updated successfully",
         "ai_provider": "NVIDIA OpenAI-Compatible API",
         "model": settings.NVIDIA_MODEL
     }

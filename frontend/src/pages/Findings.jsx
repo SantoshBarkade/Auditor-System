@@ -8,42 +8,49 @@ import {
   ArrowRight,
   RefreshCw,
   Terminal,
-  ExternalLink
+  ExternalLink,
+  AlertCircle,
+  FileCode,
+  Plus
 } from 'lucide-react';
+import { useLocation } from 'wouter';
 import { api } from '../services/api';
 import StatusBadge from '../components/ui/StatusBadge';
 import FindingDetail from './FindingDetail';
 
 export default function Findings({
-  selectedFindingId: initialFindingId,
+  selectedFindingId: propFindingId = null,
   onClearSelectedFinding,
   onNavigate,
   onNavigateTab
 }) {
-  const [selectedFindingId, setSelectedFindingId] = useState(initialFindingId || null);
+  const [, setLocation] = useLocation();
+  const [selectedFindingId, setSelectedFindingId] = useState(propFindingId);
   const [findings, setFindings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [severityFilter, setSeverityFilter] = useState('ALL');
+  const [vendorFilter, setVendorFilter] = useState('ALL');
 
   useEffect(() => {
-    if (initialFindingId) {
-      setSelectedFindingId(initialFindingId);
-    }
-  }, [initialFindingId]);
+    setSelectedFindingId(propFindingId);
+  }, [propFindingId]);
 
   const loadFindings = async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await api.getFindings();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setFindings(data);
       } else {
-        setFindings(getFallbackFindings());
+        setFindings([]);
       }
     } catch (err) {
-      console.warn('Using fallback findings:', err);
-      setFindings(getFallbackFindings());
+      console.error('Failed to load findings:', err);
+      setError(err);
+      setFindings([]);
     } finally {
       setLoading(false);
     }
@@ -53,249 +60,208 @@ export default function Findings({
     loadFindings();
   }, []);
 
-  const getFallbackFindings = () => [
-    {
-      id: 60,
-      rule_id: 'CISCO-ACL-PERMISSIVE-001',
-      title: 'Overly Permissive Any-to-Any Access Control List',
-      severity: 'CRITICAL',
-      status: 'OPEN',
-      verdict: 'FAIL',
-      evidence: 'access-list 101 permit ip any any',
-      device: 'Cisco-CORE-01',
-      vendor: 'Cisco',
-      line_numbers: [32]
-    },
-    {
-      id: 61,
-      rule_id: 'CISCO-PWD-PLAINTEXT-001',
-      title: 'Reversible Plaintext Enable Password Configured',
-      severity: 'HIGH',
-      status: 'OPEN',
-      verdict: 'FAIL',
-      evidence: 'enable password 7 0822455B1A0A',
-      device: 'Cisco-CORE-01',
-      vendor: 'Cisco',
-      line_numbers: [14]
-    },
-    {
-      id: 62,
-      rule_id: 'CISCO-SSH-VER-001',
-      title: 'Insecure SSH Version 1 Configured',
-      severity: 'HIGH',
-      status: 'OPEN',
-      verdict: 'FAIL',
-      evidence: 'ip ssh version 1',
-      device: 'Cisco-CORE-01',
-      vendor: 'Cisco',
-      line_numbers: [19]
-    },
-    {
-      id: 63,
-      rule_id: 'CISCO-VTY-UNRESTRICTED-001',
-      title: 'Unrestricted Management Access on VTY Lines',
-      severity: 'MEDIUM',
-      status: 'OPEN',
-      verdict: 'FAIL',
-      evidence: 'line vty 0 4\n transport input all',
-      device: 'Cisco-CORE-01',
-      vendor: 'Cisco',
-      line_numbers: [41]
-    },
-    {
-      id: 64,
-      rule_id: 'CISCO-TELNET-001',
-      title: 'Unencrypted Telnet Management Protocol Active',
-      severity: 'CRITICAL',
-      status: 'OPEN',
-      verdict: 'FAIL',
-      evidence: 'line vty 0 4\n transport input telnet',
-      device: 'Cisco-CORE-01',
-      vendor: 'Cisco',
-      line_numbers: [38]
-    },
-    {
-      id: 65,
-      rule_id: 'CISCO-AAA-MISSING-001',
-      title: 'AAA Subsystem Disabled / Missing',
-      severity: 'MEDIUM',
-      status: 'OPEN',
-      verdict: 'FAIL',
-      evidence: 'no aaa new-model',
-      device: 'Cisco-CORE-01',
-      vendor: 'Cisco',
-      line_numbers: [1]
-    },
-    {
-      id: 66,
-      rule_id: 'CIS-UNRESOLVED-0005',
-      title: 'Unresolved Security-Sensitive Directive',
-      severity: 'UNRESOLVED',
-      status: 'UNRESOLVED',
-      verdict: 'UNRESOLVED',
-      evidence: 'crypto pki trustpoint TP-self-signed-187522',
-      device: 'Cisco-CORE-01',
-      vendor: 'Cisco',
-      line_numbers: [5]
-    },
-    {
-      id: 67,
-      rule_id: 'CIS-UNRESOLVED-0006',
-      title: 'Unresolved Security-Sensitive Directive',
-      severity: 'UNRESOLVED',
-      status: 'UNRESOLVED',
-      verdict: 'UNRESOLVED',
-      evidence: 'enrollment selfsigned',
-      device: 'Cisco-CORE-01',
-      vendor: 'Cisco',
-      line_numbers: [6]
-    }
-  ];
+  const handleSelectFinding = (id) => {
+    setSelectedFindingId(id);
+    setLocation(`/findings/${id}`);
+  };
 
-  // If a specific finding is selected, render FindingDetail in-place
+  const handleClearSelectedFinding = () => {
+    setSelectedFindingId(null);
+    if (typeof onClearSelectedFinding === 'function') onClearSelectedFinding();
+    setLocation('/findings');
+  };
+
+  // If a finding is selected, show detail view
   if (selectedFindingId) {
     return (
       <FindingDetail
         findingId={selectedFindingId}
-        onBack={() => {
-          setSelectedFindingId(null);
-          if (onClearSelectedFinding) onClearSelectedFinding();
-        }}
+        onBack={handleClearSelectedFinding}
         onNavigateTab={onNavigateTab}
       />
     );
   }
 
-  // Filtered list
-  const filtered = findings.filter((f) => {
-    const matchSearch =
-      (f.title || '').toLowerCase().includes(search.toLowerCase()) ||
-      (f.rule_id || '').toLowerCase().includes(search.toLowerCase()) ||
-      (f.evidence || '').toLowerCase().includes(search.toLowerCase());
+  const filteredFindings = findings.filter((f) => {
+    const titleMatch = (f.title || '').toLowerCase().includes(search.toLowerCase());
+    const ruleMatch = (f.rule_id || '').toLowerCase().includes(search.toLowerCase());
+    const evidenceMatch = (f.evidence || '').toLowerCase().includes(search.toLowerCase());
+    const matchSearch = titleMatch || ruleMatch || evidenceMatch;
 
     const matchSeverity =
       severityFilter === 'ALL'
         ? true
-        : severityFilter === 'CRITICAL'
-        ? f.severity === 'CRITICAL'
-        : severityFilter === 'FAILED'
-        ? f.verdict === 'FAIL' || f.severity === 'HIGH' || f.severity === 'CRITICAL'
-        : severityFilter === 'UNRESOLVED'
-        ? f.severity === 'UNRESOLVED' || f.verdict === 'UNRESOLVED' || f.status === 'UNRESOLVED'
-        : severityFilter === 'PASSED'
-        ? f.verdict === 'PASS' || f.is_remediated
-        : true;
+        : f.severity?.toUpperCase() === severityFilter.toUpperCase();
 
-    return matchSearch && matchSeverity;
+    const matchVendor =
+      vendorFilter === 'ALL'
+        ? true
+        : f.vendor?.toLowerCase() === vendorFilter.toLowerCase();
+
+    return matchSearch && matchSeverity && matchVendor;
   });
 
+  const criticalCount = findings.filter((f) => f.severity === 'CRITICAL').length;
+  const highCount = findings.filter((f) => f.severity === 'HIGH').length;
+  const openCount = findings.filter((f) => f.status === 'OPEN').length;
+
   return (
-    <div className="space-y-8 pb-16 animate-in fade-in duration-200">
-      {/* 1. Header with clear, comfortable typography */}
-      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-4 pb-2">
+    <div className="space-y-6 pb-16 animate-in fade-in duration-200">
+      {/* 1. Header */}
+      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-4 pb-1">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
-            Security findings
-          </h1>
-          <p className="text-base sm:text-lg text-slate-300 mt-2 font-normal leading-relaxed">
-            Deterministic control failures proven from audited network configurations.
+          <div className="flex items-center space-x-3">
+            <h1 className="text-3xl font-bold tracking-tight text-white">
+              Security findings
+            </h1>
+            <span className="text-xs font-mono px-2.5 py-1 rounded-md bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-bold">
+              {findings.length} TOTAL
+            </span>
+          </div>
+          <p className="text-sm sm:text-base text-slate-300 mt-1.5 font-normal leading-relaxed">
+            Deterministic control failures and security violations extracted directly from audited device configurations.
           </p>
         </div>
 
-        <button
-          onClick={loadFindings}
-          disabled={loading}
-          className="inline-flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium text-slate-300 hover:text-white bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer disabled:opacity-50 self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          <span>Refresh</span>
-        </button>
+        <div className="flex items-center space-x-2.5 shrink-0">
+          <button
+            onClick={() => setLocation('/audits')}
+            className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm transition-colors cursor-pointer shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New audit</span>
+          </button>
+          <button
+            onClick={loadFindings}
+            disabled={loading}
+            className="p-2.5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+            title="Refresh findings"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
+          </button>
+        </div>
       </div>
 
-      <div className="border-t border-slate-800/80" />
-
-      {/* 2. Filter & Search Row */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* Filter Pills with comfortable tap targets and readable text */}
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          {[
-            { id: 'ALL', label: 'All findings' },
-            { id: 'CRITICAL', label: 'Critical' },
-            { id: 'FAILED', label: 'Failed' },
-            { id: 'UNRESOLVED', label: 'Unresolved' },
-            { id: 'PASSED', label: 'Passed' }
-          ].map((tab) => {
-            const isActive = severityFilter === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setSeverityFilter(tab.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                  isActive
-                    ? 'bg-slate-800 text-white border border-slate-700 font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-900/70 border border-transparent'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+      {/* Error state */}
+      {error && (
+        <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-800/60 text-rose-200 flex items-start justify-between gap-4">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold text-base text-rose-300">Unable to load security findings</div>
+              <div className="text-sm text-rose-400/90 mt-0.5 font-mono">{error.message || 'API connection failed'}</div>
+            </div>
+          </div>
+          <button
+            onClick={loadFindings}
+            className="px-3 py-1.5 text-xs font-semibold bg-rose-800/40 hover:bg-rose-800/60 text-rose-100 rounded border border-rose-700/50 cursor-pointer shrink-0"
+          >
+            Retry
+          </button>
         </div>
+      )}
 
-        {/* Search Input with standard height and readable font */}
-        <div className="relative w-full md:w-80">
+      {/* 2. Filter & Search Controls */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
+            placeholder="Search findings by title, rule ID, or syntax evidence..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search rule, title, evidence..."
-            className="w-full pl-10 pr-4 py-2 text-sm bg-slate-950 border border-slate-800 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500/60 font-sans"
+            className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-950 border border-slate-800/90 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500/60 font-sans"
           />
+        </div>
+
+        <div className="flex items-center space-x-2 shrink-0">
+          <select
+            value={severityFilter}
+            onChange={(e) => setSeverityFilter(e.target.value)}
+            className="px-3.5 py-2.5 text-sm font-medium bg-slate-950 border border-slate-800/90 rounded-lg text-slate-300 focus:outline-none focus:border-cyan-500/60"
+          >
+            <option value="ALL">All Severities</option>
+            <option value="CRITICAL">Critical ({criticalCount})</option>
+            <option value="HIGH">High ({highCount})</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </select>
+
+          <select
+            value={vendorFilter}
+            onChange={(e) => setVendorFilter(e.target.value)}
+            className="px-3.5 py-2.5 text-sm font-medium bg-slate-950 border border-slate-800/90 rounded-lg text-slate-300 focus:outline-none focus:border-cyan-500/60"
+          >
+            <option value="ALL">All Vendors</option>
+            <option value="cisco">Cisco</option>
+            <option value="fortinet">Fortinet</option>
+            <option value="juniper">Juniper</option>
+          </select>
         </div>
       </div>
 
-      {/* 3. Findings Table with standard enterprise size & generous row height */}
-      <div className="border border-slate-800/80 rounded-xl overflow-hidden bg-slate-950/40 shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-slate-800 bg-slate-950 text-slate-400 font-semibold uppercase tracking-wider text-xs">
-                <th className="px-5 py-4">Severity</th>
-                <th className="px-5 py-4">Rule ID</th>
-                <th className="px-5 py-4">Finding Description</th>
-                <th className="px-5 py-4">Device</th>
-                <th className="px-5 py-4">Evidence Line</th>
-                <th className="px-5 py-4">Verdict</th>
-                <th className="px-5 py-4 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/70 text-slate-300">
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan="7" className="px-6 py-16 text-center text-slate-400 font-medium text-base">
-                    No findings match the selected criteria.
-                  </td>
+      {/* 3. Findings Table or Empty State */}
+      {loading && findings.length === 0 ? (
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-16 rounded-xl bg-slate-900/40 border border-slate-800/60 animate-pulse" />
+          ))}
+        </div>
+      ) : findings.length === 0 ? (
+        <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-12 text-center space-y-4 shadow-sm">
+          <div className="w-12 h-12 rounded-xl bg-slate-900/80 border border-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+            <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+          </div>
+          <div className="max-w-md mx-auto space-y-1.5">
+            <h3 className="text-xl font-bold text-white">No findings recorded</h3>
+            <p className="text-sm sm:text-base text-slate-400 leading-relaxed">
+              No configuration findings exist in the database. Run an audit on a network configuration to detect security vulnerabilities.
+            </p>
+          </div>
+          <button
+            onClick={() => setLocation('/audits')}
+            className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm transition-colors cursor-pointer shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Execute new audit</span>
+          </button>
+        </div>
+      ) : filteredFindings.length === 0 ? (
+        <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-8 text-center space-y-2">
+          <div className="text-slate-300 font-semibold text-base">No findings match your filters</div>
+          <p className="text-sm text-slate-500">Try adjusting your search term or severity filter.</p>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm font-sans">
+              <thead>
+                <tr className="border-b border-slate-800/80 text-slate-400 uppercase tracking-wider font-semibold text-xs bg-slate-900/50">
+                  <th className="px-5 py-4">Severity</th>
+                  <th className="px-5 py-4">Rule ID & Title</th>
+                  <th className="px-5 py-4">Vendor / Line</th>
+                  <th className="px-5 py-4">Evidence</th>
+                  <th className="px-5 py-4">Status</th>
+                  <th className="px-5 py-4 text-right">Action</th>
                 </tr>
-              ) : (
-                filtered.map((f) => {
-                  const isCritical = f.severity === 'CRITICAL';
-                  const isUnresolved = f.severity === 'UNRESOLVED' || f.verdict === 'UNRESOLVED';
-                  const lineNum = f.line_numbers && f.line_numbers.length > 0 ? f.line_numbers[0] : f.line_number || '38';
-
+              </thead>
+              <tbody className="divide-y divide-slate-800/70">
+                {filteredFindings.map((f) => {
+                  const line = f.line_numbers?.[0] || f.line_number || '?';
                   return (
                     <tr
                       key={f.id}
-                      onClick={() => setSelectedFindingId(f.id)}
+                      onClick={() => handleSelectFinding(f.id)}
                       className="hover:bg-slate-900/60 cursor-pointer transition-colors group"
                     >
+                      {/* Severity */}
                       <td className="px-5 py-4 whitespace-nowrap">
                         <span
-                          className={`px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider inline-block ${
-                            isCritical
-                              ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                              : isUnresolved
-                              ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                          className={`px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${
+                            f.severity === 'CRITICAL'
+                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                              : f.severity === 'HIGH'
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                               : 'bg-slate-800 text-slate-300 border border-slate-700'
                           }`}
                         >
@@ -303,44 +269,52 @@ export default function Findings({
                         </span>
                       </td>
 
-                      <td className="px-5 py-4 font-mono text-sm text-cyan-400 whitespace-nowrap font-semibold">
-                        {f.rule_id}
-                      </td>
-
-                      <td className="px-5 py-4 max-w-md">
-                        <div className="font-medium text-base text-slate-100 group-hover:text-cyan-300 transition-colors truncate">
+                      {/* Rule ID & Title */}
+                      <td className="px-5 py-4">
+                        <div className="font-mono text-sm font-semibold text-cyan-400 group-hover:text-cyan-300">
+                          {f.rule_id}
+                        </div>
+                        <div className="text-sm font-medium text-slate-100 max-w-sm sm:max-w-md truncate mt-0.5">
                           {f.title}
                         </div>
                       </td>
 
-                      <td className="px-5 py-4 text-slate-300 font-mono text-sm whitespace-nowrap">
-                        {f.device || f.vendor || 'Cisco-CORE-01'}
-                      </td>
-
+                      {/* Vendor / Line */}
                       <td className="px-5 py-4 whitespace-nowrap">
-                        <span className="font-mono text-xs font-semibold text-rose-300 bg-rose-950/40 px-2.5 py-1 rounded border border-rose-800/50 inline-block">
-                          Line {lineNum}
+                        <span className="text-sm font-medium text-slate-300 capitalize">{f.vendor || 'Network'}</span>
+                        <span className="text-slate-600 mx-1.5">•</span>
+                        <span className="font-mono text-xs text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                          Line {line}
                         </span>
                       </td>
 
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <StatusBadge status={f.verdict || (isUnresolved ? 'UNRESOLVED' : 'FAIL')} size="sm" />
+                      {/* Evidence */}
+                      <td className="px-5 py-4 max-w-xs truncate">
+                        <code className="font-mono text-xs text-slate-300 bg-slate-950 px-2 py-1 rounded border border-slate-800/80">
+                          {f.evidence || 'Configuration directive'}
+                        </code>
                       </td>
 
+                      {/* Status */}
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <StatusBadge status={f.status} size="sm" />
+                      </td>
+
+                      {/* Action */}
                       <td className="px-5 py-4 text-right whitespace-nowrap">
-                        <span className="inline-flex items-center space-x-1.5 text-sm text-slate-400 group-hover:text-cyan-400 font-medium transition-colors">
-                          <span>View proof</span>
+                        <span className="text-slate-400 group-hover:text-cyan-400 font-semibold transition-colors text-sm inline-flex items-center space-x-1.5">
+                          <span>Inspect</span>
                           <ArrowRight className="w-4 h-4" />
                         </span>
                       </td>
                     </tr>
                   );
-                })
-              )}
-            </tbody>
-          </table>
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

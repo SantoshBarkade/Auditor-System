@@ -4,6 +4,7 @@ import datetime
 from datetime import timezone
 from typing import List, Dict, Any, Tuple, Optional
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.core.database import AsyncSessionLocal
 from backend.app.models.models import BlockchainBlock
 from backend.app.core.config import settings
@@ -42,74 +43,92 @@ class BlockchainLedger:
         return result.scalar_one_or_none()
 
     @classmethod
+    async def _append_event_impl(
+        cls,
+        session: AsyncSession,
+        event_type: str,
+        event_data: Dict[str, Any],
+        actor: str,
+        audit_id: Optional[int]
+    ) -> BlockchainBlock:
+        latest = await cls.get_latest_block(session)
+
+        if latest is None:
+            # Create Genesis Block first
+            genesis_time = datetime.datetime.now(timezone.utc).replace(tzinfo=None)
+            genesis_payload_hash = cls.calculate_payload_hash({"message": "NEXORA Genesis Ledger Initialized"})
+            genesis_hash = cls.calculate_block_hash(
+                block_index=0,
+                timestamp_str=genesis_time.isoformat(),
+                event_type="GENESIS",
+                actor="SYSTEM",
+                audit_id=None,
+                payload_hash=genesis_payload_hash,
+                previous_hash=cls.GENESIS_PREV_HASH
+            )
+            genesis_block = BlockchainBlock(
+                block_index=0,
+                timestamp=genesis_time,
+                event_type="GENESIS",
+                actor="SYSTEM",
+                audit_id=None,
+                event_data={"message": "NEXORA Genesis Ledger Initialized"},
+                payload_hash=genesis_payload_hash,
+                previous_hash=cls.GENESIS_PREV_HASH,
+                block_hash=genesis_hash
+            )
+            session.add(genesis_block)
+            await session.flush()
+            latest = genesis_block
+
+        # Now append new event
+        new_index = latest.block_index + 1
+        now = datetime.datetime.now(timezone.utc).replace(tzinfo=None)
+        payload_hash = cls.calculate_payload_hash(event_data)
+        block_hash = cls.calculate_block_hash(
+            block_index=new_index,
+            timestamp_str=now.isoformat(),
+            event_type=event_type,
+            actor=actor,
+            audit_id=audit_id,
+            payload_hash=payload_hash,
+            previous_hash=latest.block_hash
+        )
+
+        new_block = BlockchainBlock(
+            block_index=new_index,
+            timestamp=now,
+            event_type=event_type,
+            actor=actor,
+            audit_id=audit_id,
+            event_data=event_data,
+            payload_hash=payload_hash,
+            previous_hash=latest.block_hash,
+            block_hash=block_hash
+        )
+
+        session.add(new_block)
+        await session.flush()
+        await session.refresh(new_block)
+        return new_block
+
+    @classmethod
     async def append_event(
         cls,
         event_type: str,
         event_data: Dict[str, Any],
         actor: str = "SECURITY_ADMIN",
-        audit_id: Optional[int] = None
+        audit_id: Optional[int] = None,
+        session: Optional[AsyncSession] = None
     ) -> BlockchainBlock:
-        async with AsyncSessionLocal() as session:
-            latest = await cls.get_latest_block(session)
+        if session is not None:
+            block = await cls._append_event_impl(session, event_type, event_data, actor, audit_id)
+            return block
 
-            if latest is None:
-                # Create Genesis Block first
-                genesis_time = datetime.datetime.now(timezone.utc).replace(tzinfo=None)
-                genesis_payload_hash = cls.calculate_payload_hash({"message": "NEXORA Genesis Ledger Initialized"})
-                genesis_hash = cls.calculate_block_hash(
-                    block_index=0,
-                    timestamp_str=genesis_time.isoformat(),
-                    event_type="GENESIS",
-                    actor="SYSTEM",
-                    audit_id=None,
-                    payload_hash=genesis_payload_hash,
-                    previous_hash=cls.GENESIS_PREV_HASH
-                )
-                genesis_block = BlockchainBlock(
-                    block_index=0,
-                    timestamp=genesis_time,
-                    event_type="GENESIS",
-                    actor="SYSTEM",
-                    audit_id=None,
-                    event_data={"message": "NEXORA Genesis Ledger Initialized"},
-                    payload_hash=genesis_payload_hash,
-                    previous_hash=cls.GENESIS_PREV_HASH,
-                    block_hash=genesis_hash
-                )
-                session.add(genesis_block)
-                await session.commit()
-                latest = genesis_block
-
-            # Now append new event
-            new_index = latest.block_index + 1
-            now = datetime.datetime.now(timezone.utc).replace(tzinfo=None)
-            payload_hash = cls.calculate_payload_hash(event_data)
-            block_hash = cls.calculate_block_hash(
-                block_index=new_index,
-                timestamp_str=now.isoformat(),
-                event_type=event_type,
-                actor=actor,
-                audit_id=audit_id,
-                payload_hash=payload_hash,
-                previous_hash=latest.block_hash
-            )
-
-            new_block = BlockchainBlock(
-                block_index=new_index,
-                timestamp=now,
-                event_type=event_type,
-                actor=actor,
-                audit_id=audit_id,
-                event_data=event_data,
-                payload_hash=payload_hash,
-                previous_hash=latest.block_hash,
-                block_hash=block_hash
-            )
-
-            session.add(new_block)
-            await session.commit()
-            await session.refresh(new_block)
-            return new_block
+        async with AsyncSessionLocal() as new_session:
+            block = await cls._append_event_impl(new_session, event_type, event_data, actor, audit_id)
+            await new_session.commit()
+            return block
 
     @classmethod
     async def get_all_blocks(cls) -> List[BlockchainBlock]:

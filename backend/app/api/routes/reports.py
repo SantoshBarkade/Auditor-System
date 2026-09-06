@@ -1,6 +1,5 @@
-import os
+﻿import os
 from fastapi import APIRouter, Depends, HTTPException, Response
-from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.core.database import get_db
@@ -50,11 +49,12 @@ async def download_pdf_report(audit_id: int, db: AsyncSession = Depends(get_db))
         "message": msg
     }
 
-    pdf_path = await PDFReportGenerator.generate_report_async(audit_dict, findings, blockchain_status)
-    return FileResponse(
-        pdf_path,
+    pdf_bytes = await PDFReportGenerator.generate_report_bytes_async(audit_dict, findings, blockchain_status)
+    filename = f"NEXORA_Audit_Report_Audit_{audit_id}.pdf"
+    return Response(
+        content=pdf_bytes,
         media_type="application/pdf",
-        filename=os.path.basename(pdf_path)
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
 @router.get("/{audit_id}/csv")

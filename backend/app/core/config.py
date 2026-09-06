@@ -1,31 +1,65 @@
-import os
+﻿import os
 from pathlib import Path
 from pydantic import field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 PROJECT_ROOT = BASE_DIR.parent
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        extra="allow"
+    )
+
     PROJECT_NAME: str = "NEXORA"
-    VERSION: str = "1.0.0-prototype"
+    VERSION: str = "1.0.0-production"
     DESCRIPTION: str = "AI-Driven Multi-Vendor Network Security Compliance Auditor"
     SIH_PROBLEM_ID: str = "SIH26155"
     TEAM_NAME: str = "WeirdBits"
-    THEME: str = "Blockchain & Cybersecurity"
+    THEME: str = "Blockchain and Cybersecurity"
     DEBUG: bool = False
-    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+
+    # Production CORS: Local dev + Vercel deployment domains
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+        "https://nexora.vercel.app"
+    ]
+    CORS_ORIGIN_REGEX: str | None = r"^https:\/\/.*\.vercel\.app$"
+    
+    # Upload Security: 5MB maximum file upload
+    MAX_UPLOAD_SIZE: int = 5 * 1024 * 1024
+
     ADMIN_TOKEN: str = "dev-token-change-in-prod"
     
     # Storage
     DATABASE_URL: str = f"sqlite+aiosqlite:///{BASE_DIR}/nexora.db"
     SYNC_DATABASE_URL: str = f"sqlite:///{BASE_DIR}/nexora.db"
     
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            v_strip = v.strip()
+            if v_strip.startswith("[") and v_strip.endswith("]"):
+                import json
+                try:
+                    return json.loads(v_strip)
+                except Exception:
+                    pass
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
+
     @field_validator("DATABASE_URL", mode="after")
     @classmethod
     def normalize_database_url(cls, v: str) -> str:
         if v and v.startswith("postgresql://"):
             return v.replace("postgresql://", "postgresql+psycopg://", 1)
+        elif v and v.startswith("postgresql+asyncpg://"):
+            return v.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
         return v
 
     @field_validator("SYNC_DATABASE_URL", mode="after")
@@ -55,10 +89,6 @@ class Settings(BaseSettings):
     # Paths
     SAMPLE_CONFIGS_DIR: Path = PROJECT_ROOT / "sample_configs"
     REPORTS_DIR: Path = BASE_DIR / "reports"
-    
-    class Config:
-        env_file = str(PROJECT_ROOT / ".env")
-        extra = "allow"
 
 settings = Settings()
 

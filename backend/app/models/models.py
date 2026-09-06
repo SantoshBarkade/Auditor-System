@@ -38,7 +38,7 @@ class Audit(Base):
     __tablename__ = "audits"
 
     id = Column(Integer, primary_key=True, index=True)
-    configuration_id = Column(Integer, ForeignKey("configurations.id"), nullable=False)
+    configuration_id = Column(Integer, ForeignKey("configurations.id"), nullable=False, index=True)
     vendor = Column(String(50), nullable=False)
     status = Column(String(50), default="PENDING")  # PENDING, RUNNING, COMPLETED, FAILED
     stage = Column(String(100), default="Issue Identified")
@@ -57,7 +57,7 @@ class Finding(Base):
     __tablename__ = "findings"
 
     id = Column(Integer, primary_key=True, index=True)
-    audit_id = Column(Integer, ForeignKey("audits.id"), nullable=False)
+    audit_id = Column(Integer, ForeignKey("audits.id"), nullable=False, index=True)
     rule_id = Column(String(100), nullable=False)
     title = Column(String(255), nullable=False)
     vendor = Column(String(50), nullable=False)
@@ -95,7 +95,7 @@ class Remediation(Base):
     __tablename__ = "remediations"
 
     id = Column(Integer, primary_key=True, index=True)
-    finding_id = Column(Integer, ForeignKey("findings.id"), nullable=False)
+    finding_id = Column(Integer, ForeignKey("findings.id"), nullable=False, index=True)
     vendor = Column(String(50), nullable=False)
     current_config = Column(Text, nullable=False)
     recommended_config = Column(Text, nullable=False)
@@ -110,7 +110,7 @@ class Approval(Base):
     __tablename__ = "approvals"
 
     id = Column(Integer, primary_key=True, index=True)
-    remediation_id = Column(Integer, ForeignKey("remediations.id"), nullable=False)
+    remediation_id = Column(Integer, ForeignKey("remediations.id"), nullable=False, index=True)
     reviewer = Column(String(100), default="Security Administrator")
     decision = Column(String(20), nullable=False)  # APPROVED, REJECTED
     note = Column(Text, nullable=True)
@@ -136,7 +136,7 @@ class Report(Base):
     __tablename__ = "reports"
 
     id = Column(Integer, primary_key=True, index=True)
-    audit_id = Column(Integer, ForeignKey("audits.id"), nullable=False)
+    audit_id = Column(Integer, ForeignKey("audits.id"), nullable=False, index=True)
     report_type = Column(String(20), nullable=False)  # PDF, CSV, JSON
     filename = Column(String(255), nullable=False)
     file_path = Column(String(500), nullable=False)

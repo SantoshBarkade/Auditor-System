@@ -1,3 +1,4 @@
+from backend.app.services.finding_pipeline import FindingPipelineService
 from typing import Dict, Any, Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -254,3 +255,17 @@ async def simulate_remediation(finding_id: int, reviewer: str = "Security Admini
     )
 
     return verification_results
+
+@router.get("/{finding_id}/pipeline")
+async def get_finding_pipeline(finding_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Returns complete authoritative machine-readable pipeline provenance:
+    Configuration -> Vendor Detection -> Parser -> Normalization -> Facts ->
+    Security State -> Compliance Engine -> Verdict -> Evidence -> Risk ->
+    Remediation -> AI Advisory -> Unresolved Case -> Blockchain -> Reporting
+    """
+    pipeline_data = await FindingPipelineService.get_finding_pipeline(db, finding_id)
+    if not pipeline_data:
+        raise HTTPException(status_code=404, detail=f"Finding #{finding_id} not found")
+    return pipeline_data
+

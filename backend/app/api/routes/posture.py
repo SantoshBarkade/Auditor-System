@@ -191,8 +191,7 @@ async def get_posture_summary(db: AsyncSession = Depends(get_db)):
         vendor_posture[v]["risk_scores"].append(audit.risk_score or 0)
         vendor_posture[v]["compliance_pcts"].append(audit.compliance_score or 0.0)
 
-    for v, f in all_findings:
-        pass  # already aggregated below
+    # Open findings aggregated below per vendor
 
     # Count open findings per vendor
     vendor_finding_counts: dict = {}
@@ -263,7 +262,7 @@ async def get_posture_summary(db: AsyncSession = Depends(get_db)):
             continue
         activity_feed.append({
             "event_type":  event_type,
-            "timestamp":   block.created_at.isoformat() if block.created_at else None,
+            "timestamp":   block.timestamp.isoformat() if block.timestamp else None,
             "actor":       block.actor or "NEXORA Engine",
             "audit_id":    block.audit_id,
             "description": _describe_event(event_type, payload),

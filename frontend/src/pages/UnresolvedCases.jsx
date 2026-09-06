@@ -16,7 +16,8 @@ import {
   RefreshCw,
   Sparkles,
   ShieldAlert,
-  ShieldCheck
+  ShieldCheck,
+  AlertCircle
 } from 'lucide-react';
 import { api } from '../services/api';
 import StatusBadge from '../components/ui/StatusBadge';
@@ -26,57 +27,29 @@ export default function UnresolvedCases({ selectedCaseId: initialCaseId = null, 
   const [cases, setCases] = useState([]);
   const [stats, setStats] = useState({ total: 0, open: 0, awaiting_review: 0, resolved: 0 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedCase, setSelectedCase] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [investigating, setInvestigating] = useState(false);
   const [expandedDoc, setExpandedDoc] = useState(null);
 
-  // Human Review Form state
-  const [reviewerName, setReviewerName] = useState('senior-architect@nexora.internal');
+  // Human Review Form state - honest initial state, no fake defaults
+  const [reviewerName, setReviewerName] = useState('');
   const [finalVerdict, setFinalVerdict] = useState('CONFIRMED_SAFE');
-  const [engineeringRationale, setEngineeringRationale] = useState(
-    'Engineering review confirmed directive conforms to perimeter security policy. Validated against reference network baseline.'
-  );
-  const [resolutionEvidence, setResolutionEvidence] = useState('Architecture Spec v4.2 / Jira SecOps-4182');
+  const [engineeringRationale, setEngineeringRationale] = useState('');
+  const [resolutionEvidence, setResolutionEvidence] = useState('');
   const [submittingResolution, setSubmittingResolution] = useState(false);
-
-  // Authoritative vendor documentation references
-  const vendorDocs = [
-    {
-      id: 1,
-      title: 'Junos Security Policy Reference Guide',
-      similarity: '0.84',
-      source: 'Juniper TechLibrary',
-      excerpt:
-        'In Junos OS, policies referencing custom application sets require a corresponding definition under [edit applications application <name>]. If undefined at parse time, policy action defaults to system-wide reject or unresolved evaluation.'
-    },
-    {
-      id: 2,
-      title: 'Cisco IOS-XE Access Control Lists Guide',
-      similarity: '0.81',
-      source: 'Cisco Technical Documentation',
-      excerpt:
-        'Standard and Extended ACL statements evaluate sequentially. Unclassified tokens or custom macro parameters that fail strict lexer matching are quarantined for operational human review to avoid false-positive pass conclusions.'
-    },
-    {
-      id: 3,
-      title: 'FortiOS Firewall Policy Standards',
-      similarity: '0.78',
-      source: 'Fortinet Documentation Library',
-      excerpt:
-        'Referenced address groups or custom service objects must exist in the local VDOM database. Ambiguous syntax in policy stanzas prevents deterministic compliance computation.'
-    }
-  ];
 
   async function loadCases() {
     setLoading(true);
+    setError(null);
     try {
       const [casesRes, statsRes] = await Promise.all([
         api.getUnresolvedCases(),
         api.getUnresolvedStats()
       ]);
 
-      if (Array.isArray(casesRes) && casesRes.length > 0) {
+      if (Array.isArray(casesRes)) {
         setCases(casesRes);
       } else {
         setCases([]);
@@ -86,7 +59,9 @@ export default function UnresolvedCases({ selectedCaseId: initialCaseId = null, 
         setStats(statsRes);
       }
     } catch (err) {
-      console.warn('Error loading unresolved cases', err);
+      console.error('Error loading unresolved cases:', err);
+      setError(err?.message || 'Unable to load unresolved cases from backend.');
+      setCases([]);
     } finally {
       setLoading(false);
     }
@@ -112,7 +87,7 @@ export default function UnresolvedCases({ selectedCaseId: initialCaseId = null, 
         if (found) setSelectedCase(found);
       }
     } catch (err) {
-      console.warn('Error fetching full case detail', err);
+      console.error('Error fetching full case detail:', err);
       const found = cases.find((c) => c.id === id);
       if (found) setSelectedCase(found);
     } finally {
@@ -134,29 +109,18 @@ export default function UnresolvedCases({ selectedCaseId: initialCaseId = null, 
     if (!selectedCase) return;
     setInvestigating(true);
     try {
-      const updated = await api.triggerAIInvestigation(selectedCase.id, reviewerName);
+      const actor = reviewerName.trim() || 'secops-reviewer';
+      const updated = await api.triggerAIInvestigation(selectedCase.id, actor);
       if (updated && updated.id) {
         setSelectedCase(updated);
         showToast('Authoritative RAG retrieval and NVIDIA AI Advisory generated', 'success');
+        loadCases();
       } else {
-        setSelectedCase((prev) => ({
-          ...prev,
-          status: 'AWAITING_REVIEW',
-          ai_analysis: {
-            interpretation: `The directive at line ${prev.source_lines?.[0] || 16} contains security keywords requiring explicit architecture context.`,
-            confidence: 'MEDIUM',
-            reasoning_summary: 'Deterministic engine halted due to incomplete lexical reference in supplied configuration.',
-            recommendation: 'RESOLVED_WITH_CONTEXT',
-            source: 'Deterministic Fallback Engine',
-            warning: 'AI analysis is not authoritative. It is advisory only.'
-          }
-        }));
-        showToast('AI Advisory generated (Advisory mode)', 'success');
+        showToast('Backend did not return updated analysis.', 'error');
       }
-      loadCases();
     } catch (err) {
-      console.error('AI Advisory trigger error', err);
-      showToast('AI Advisory generation encountered an error', 'error');
+      console.error('AI Advisory trigger error:', err);
+      showToast('AI Advisory generation failed: ' + (err?.message || 'Backend error'), 'error');
     } finally {
       setInvestigating(false);
     }
@@ -164,41 +128,38 @@ export default function UnresolvedCases({ selectedCaseId: initialCaseId = null, 
 
   async function handleResolveCase() {
     if (!selectedCase) return;
+    if (!reviewerName.trim()) {
+      showToast('Reviewer identity is required for blockchain governance trail.', 'error');
+      return;
+    }
     if (!engineeringRationale.trim()) {
-      showToast('Engineering rationale is required for human governance', 'error');
+      showToast('Engineering rationale is required for human governance.', 'error');
       return;
     }
     setSubmittingResolution(true);
     try {
       const payloadEvidence = {
-        evidence: resolutionEvidence,
+        evidence: resolutionEvidence.trim() || 'Direct engineering review',
         resolved_at: new Date().toISOString()
       };
       const res = await api.resolveCase(
         selectedCase.id,
-        reviewerName,
+        reviewerName.trim(),
         finalVerdict,
-        engineeringRationale,
+        engineeringRationale.trim(),
         payloadEvidence
       );
 
       if (res && res.id) {
         setSelectedCase(res);
         showToast(`Case #${res.id} resolved as ${res.final_verdict} and committed to blockchain`, 'success');
+        loadCases();
       } else {
-        setSelectedCase((prev) => ({
-          ...prev,
-          status: 'RESOLVED',
-          final_verdict: finalVerdict,
-          reviewer: reviewerName,
-          resolution_context: engineeringRationale
-        }));
-        showToast(`Case #${selectedCase.id} resolved as ${finalVerdict}`, 'success');
+        showToast('Failed to commit case resolution to backend.', 'error');
       }
-      loadCases();
     } catch (err) {
-      console.error('Case resolution failed', err);
-      showToast('Failed to commit case resolution', 'error');
+      console.error('Case resolution failed:', err);
+      showToast('Failed to commit case resolution: ' + (err?.message || 'Transaction error'), 'error');
     } finally {
       setSubmittingResolution(false);
     }
@@ -228,6 +189,9 @@ export default function UnresolvedCases({ selectedCaseId: initialCaseId = null, 
       selectedCase.status === 'CONFIRMED_SAFE' ||
       selectedCase.status === 'CONFIRMED_VIOLATION' ||
       Boolean(selectedCase.final_verdict));
+
+  // Dynamic RAG retrieved evidence from the authoritative backend response
+  const retrievedEvidence = selectedCase?.ai_analysis?.retrieved_evidence || [];
 
   return (
     <div className="space-y-8 pb-16 animate-in fade-in duration-200">
@@ -280,17 +244,17 @@ export default function UnresolvedCases({ selectedCaseId: initialCaseId = null, 
             <div className="flex flex-wrap items-center gap-6 text-sm font-mono font-semibold">
               <span className="flex items-center space-x-2.5 text-amber-400">
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-amber-400/20" />
-                <span>{stats.open || cases.filter((c) => c.status === 'OPEN').length} OPEN HALTS</span>
+                <span>{(stats.open_cases !== undefined ? stats.open_cases : (stats.open || cases.filter((c) => c.status === 'OPEN').length))} OPEN HALTS</span>
               </span>
               <span className="text-slate-700 text-base">·</span>
               <span className="flex items-center space-x-2.5 text-cyan-400">
                 <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 ring-2 ring-cyan-400/20" />
-                <span>{stats.awaiting_review || cases.filter((c) => c.status === 'AWAITING_REVIEW').length} AWAITING REVIEW</span>
+                <span>{(stats.awaiting_review_cases !== undefined ? stats.awaiting_review_cases : (stats.awaiting_review || cases.filter((c) => c.status === 'AWAITING_REVIEW').length))} AWAITING REVIEW</span>
               </span>
               <span className="text-slate-700 text-base">·</span>
               <span className="flex items-center space-x-2.5 text-emerald-400">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-emerald-400/20" />
-                <span>{stats.resolved || cases.filter((c) => c.status === 'RESOLVED').length} RESOLVED ON BLOCKCHAIN</span>
+                <span>{(stats.resolved_cases !== undefined ? stats.resolved_cases : (stats.resolved || cases.filter((c) => c.status === 'RESOLVED').length))} RESOLVED ON BLOCKCHAIN</span>
               </span>
             </div>
           </div>
@@ -322,84 +286,114 @@ export default function UnresolvedCases({ selectedCaseId: initialCaseId = null, 
 
           <div className="border-t border-slate-800/80" />
 
-          {/* Unresolved Cases Table */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-white">
-                Active unresolved queue
-              </h2>
-              <span className="text-sm font-mono text-slate-400 font-medium">
-                {cases.length} cases registered
-              </span>
+          {/* Error State */}
+          {error && (
+            <div className="p-8 rounded-2xl bg-rose-950/20 border border-rose-900/50 text-center space-y-3">
+              <AlertCircle className="w-8 h-8 text-rose-400 mx-auto" />
+              <div className="text-white font-semibold">Unable to load unresolved cases</div>
+              <p className="text-sm text-rose-300/80 max-w-md mx-auto">{error}</p>
+              <button
+                onClick={loadCases}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-medium transition-colors cursor-pointer"
+              >
+                Retry
+              </button>
             </div>
+          )}
 
-            <div className="border border-slate-800/80 rounded-xl overflow-hidden bg-slate-950/40 shadow-sm">
-              <table className="w-full text-left text-sm text-slate-300">
-                <thead className="bg-slate-950 text-slate-400 uppercase font-semibold text-xs tracking-wider border-b border-slate-800">
-                  <tr>
-                    <th className="px-5 py-4">Case</th>
-                    <th className="px-5 py-4">Classification</th>
-                    <th className="px-5 py-4">Vendor / Line</th>
-                    <th className="px-5 py-4">Directive Snippet</th>
-                    <th className="px-5 py-4">Status</th>
-                    <th className="px-5 py-4 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/70">
-                  {cases.length === 0 ? (
+          {/* Unresolved Cases Table */}
+          {!error && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-white">
+                  Active unresolved queue
+                </h2>
+                <span className="text-sm font-mono text-slate-400 font-medium">
+                  {cases.length} cases registered
+                </span>
+              </div>
+
+              <div className="border border-slate-800/80 rounded-xl overflow-hidden bg-slate-950/40 shadow-sm">
+                <table className="w-full text-left text-sm text-slate-300">
+                  <thead className="bg-slate-950 text-slate-400 uppercase font-semibold text-xs tracking-wider border-b border-slate-800">
                     <tr>
-                      <td colSpan="6" className="p-16 text-center text-slate-400 font-medium text-base font-sans">
-                        No unresolved cases detected in audited configurations.
-                      </td>
+                      <th className="px-5 py-4">Case</th>
+                      <th className="px-5 py-4">Classification</th>
+                      <th className="px-5 py-4">Vendor / Line</th>
+                      <th className="px-5 py-4">Directive Snippet</th>
+                      <th className="px-5 py-4">Status</th>
+                      <th className="px-5 py-4 text-right">Action</th>
                     </tr>
-                  ) : (
-                    cases.map((c) => {
-                      const line = getLineNumber(c);
-                      const stmt = getRawStatement(c);
-                      return (
-                        <tr
-                          key={c.id}
-                          onClick={() => selectCaseById(c.id)}
-                          className="hover:bg-slate-900/60 cursor-pointer transition-colors group"
-                        >
-                          <td className="px-5 py-4 font-mono font-semibold text-cyan-400 whitespace-nowrap">
-                            #{c.id}
-                          </td>
-                          <td className="px-5 py-4 whitespace-nowrap">
-                            <span
-                              className={`px-2.5 py-1 rounded-md text-xs font-mono font-medium ${
-                                c.case_type === 'MISSING_REFERENCE'
-                                  ? 'bg-amber-500/10 text-amber-300 border border-amber-500/25'
-                                  : 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/25'
-                              }`}
-                            >
-                              {c.case_type === 'MISSING_REFERENCE' ? 'Missing Reference' : 'Unknown Syntax'}
-                            </span>
-                          </td>
-                          <td className="px-5 py-4 whitespace-nowrap text-slate-200 font-medium">
-                            <span className="font-semibold text-white">{c.vendor || 'Cisco'}</span>
-                            <span className="text-slate-400 ml-2 font-mono text-xs">Line {line}</span>
-                          </td>
-                          <td className="px-5 py-4 font-mono text-slate-300 max-w-sm truncate text-sm">
-                            {stmt}
-                          </td>
-                          <td className="px-5 py-4 whitespace-nowrap">
-                            <StatusBadge status={c.status} size="sm" />
-                          </td>
-                          <td className="px-5 py-4 text-right whitespace-nowrap">
-                            <span className="text-slate-400 group-hover:text-cyan-400 font-medium transition-colors text-sm inline-flex items-center space-x-1">
-                              <span>Inspect</span>
-                              <ArrowRight className="w-4 h-4" />
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/70">
+                    {loading ? (
+                      <tr>
+                        <td colSpan="6" className="p-16 text-center text-slate-400 font-mono text-sm">
+                          <RefreshCw className="w-5 h-5 animate-spin mx-auto text-cyan-400 mb-2" />
+                          Loading unresolved queue...
+                        </td>
+                      </tr>
+                    ) : cases.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="p-16 text-center text-slate-400 font-medium text-base font-sans">
+                          <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center mx-auto text-emerald-400 mb-3">
+                            <CheckCircle2 className="w-5 h-5" />
+                          </div>
+                          No unresolved cases detected in audited configurations.
+                          <div className="text-xs text-slate-400 mt-1 font-mono">
+                            All evaluated directives were deterministically resolved by the security engine.
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      cases.map((c) => {
+                        const line = getLineNumber(c);
+                        const stmt = getRawStatement(c);
+                        return (
+                          <tr
+                            key={c.id}
+                            onClick={() => selectCaseById(c.id)}
+                            className="hover:bg-slate-900/60 cursor-pointer transition-colors group"
+                          >
+                            <td className="px-5 py-4 font-mono font-semibold text-cyan-400 whitespace-nowrap">
+                              #{c.id}
+                            </td>
+                            <td className="px-5 py-4 whitespace-nowrap">
+                              <span
+                                className={`px-2.5 py-1 rounded-md text-xs font-mono font-medium ${
+                                  c.case_type === 'MISSING_REFERENCE'
+                                    ? 'bg-amber-500/10 text-amber-300 border border-amber-500/25'
+                                    : 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/25'
+                                }`}
+                              >
+                                {c.case_type === 'MISSING_REFERENCE' ? 'Missing Reference' : 'Unknown Syntax'}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 whitespace-nowrap text-slate-200 font-medium">
+                              <span className="font-semibold text-white">{c.vendor || 'Cisco'}</span>
+                              <span className="text-slate-400 ml-2 font-mono text-xs">Line {line}</span>
+                            </td>
+                            <td className="px-5 py-4 font-mono text-slate-300 max-w-sm truncate text-sm">
+                              {stmt}
+                            </td>
+                            <td className="px-5 py-4 whitespace-nowrap">
+                              <StatusBadge status={c.status} size="sm" />
+                            </td>
+                            <td className="px-5 py-4 text-right whitespace-nowrap">
+                              <span className="text-slate-400 group-hover:text-cyan-400 font-medium transition-colors text-sm inline-flex items-center space-x-1">
+                                <span>Inspect</span>
+                                <ArrowRight className="w-4 h-4" />
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -515,44 +509,67 @@ export default function UnresolvedCases({ selectedCaseId: initialCaseId = null, 
 
           <div className="border-t border-slate-800/80" />
 
-          {/* Authoritative RAG Grounding */}
+          {/* Authoritative RAG Grounding — REAL backend evidence */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                 Authoritative vendor knowledge (pgvector RAG)
               </div>
-              <span className="text-xs sm:text-sm font-mono text-cyan-400 font-semibold">Cosine similarity &gt; 0.75</span>
+              <span className="text-xs sm:text-sm font-mono text-cyan-400 font-semibold">
+                {retrievedEvidence.length} document chunk{retrievedEvidence.length !== 1 ? 's' : ''} retrieved
+              </span>
             </div>
 
-            <div className="space-y-3">
-              {vendorDocs.map((doc) => {
-                const isExpanded = expandedDoc === doc.id;
-                return (
-                  <div
-                    key={doc.id}
-                    className="border border-slate-800/80 bg-slate-900/30 rounded-xl p-4 transition-colors hover:border-slate-700/80"
-                  >
+            {retrievedEvidence.length > 0 ? (
+              <div className="space-y-3">
+                {retrievedEvidence.map((doc, idx) => {
+                  const docId = doc.id || doc.chunk_index || idx;
+                  const isExpanded = expandedDoc === docId;
+                  const title = doc.document_title || doc.title || 'Authoritative Vendor Documentation';
+                  const source = doc.source_type || doc.source || 'Knowledge Base';
+                  const authority = doc.authority_level || 'AUTHORITATIVE';
+                  const excerpt = doc.content || doc.excerpt || '';
+                  const simVal = doc.similarity ?? doc.cosine_similarity;
+                  const similarityDisplay = simVal !== undefined && simVal !== null
+                    ? Number(simVal).toFixed(2)
+                    : null;
+
+                  return (
                     <div
-                      onClick={() => setExpandedDoc(isExpanded ? null : doc.id)}
-                      className="flex items-center justify-between cursor-pointer"
+                      key={docId}
+                      className="border border-slate-800/80 bg-slate-900/30 rounded-xl p-4 transition-colors hover:border-slate-700/80"
                     >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold text-white text-sm sm:text-base">{doc.title}</span>
-                        <span className="text-slate-400 font-mono text-xs">({doc.source})</span>
+                      <div
+                        onClick={() => setExpandedDoc(isExpanded ? null : docId)}
+                        className="flex items-center justify-between cursor-pointer"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-white text-sm sm:text-base">{title}</span>
+                          <span className="text-slate-400 font-mono text-xs">({source} · {authority})</span>
+                        </div>
+                        {similarityDisplay && (
+                          <span className="text-xs sm:text-sm font-mono text-cyan-300 font-semibold px-2.5 py-1 rounded-md bg-cyan-950/60 border border-cyan-800/50 whitespace-nowrap">
+                            Sim: {similarityDisplay}
+                          </span>
+                        )}
                       </div>
-                      <span className="text-xs sm:text-sm font-mono text-cyan-300 font-semibold px-2.5 py-1 rounded-md bg-cyan-950/60 border border-cyan-800/50 whitespace-nowrap">
-                        Sim: {doc.similarity}
-                      </span>
+                      {isExpanded && (
+                        <div className="mt-3 pt-3 border-t border-slate-800 text-slate-300 leading-relaxed font-sans text-sm sm:text-base">
+                          {excerpt}
+                        </div>
+                      )}
                     </div>
-                    {isExpanded && (
-                      <div className="mt-3 pt-3 border-t border-slate-800 text-slate-300 leading-relaxed font-sans text-sm sm:text-base">
-                        {doc.excerpt}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-6 rounded-xl bg-slate-900/20 border border-slate-800/80 text-center space-y-2">
+                <div className="text-sm text-slate-300 font-medium">No retrieved evidence was returned.</div>
+                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                  Trigger the AI advisory layer below to query the authoritative vendor knowledge base for grounded evidence.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="border-t border-slate-800/80" />
@@ -649,6 +666,7 @@ export default function UnresolvedCases({ selectedCaseId: initialCaseId = null, 
                     <label className="text-sm font-medium text-slate-300">Reviewer Identity</label>
                     <input
                       type="text"
+                      placeholder="e.g. secops-architect@enterprise.org"
                       value={reviewerName}
                       onChange={(e) => setReviewerName(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-sm font-mono text-slate-100 focus:outline-none focus:border-cyan-500"
@@ -674,6 +692,7 @@ export default function UnresolvedCases({ selectedCaseId: initialCaseId = null, 
                   <label className="text-sm font-medium text-slate-300">Engineering Rationale & Justification</label>
                   <textarea
                     rows={3}
+                    placeholder="Enter technical explanation and justification based on architecture requirements..."
                     value={engineeringRationale}
                     onChange={(e) => setEngineeringRationale(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:border-cyan-500 font-sans leading-relaxed"

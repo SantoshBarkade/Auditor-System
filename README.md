@@ -157,3 +157,42 @@ SIH PROTOTYPE/
 ├── .gitignore                       # Git Exclusion Rules
 └── README.md                        # Project Documentation
 ```
+
+---
+
+## 8. Production Deployment & Vercel Configuration
+
+NEXORA is engineered for a split production deployment: a static SPA frontend hosted on **Vercel** communicating with an async **FastAPI** backend hosted on containerized cloud infrastructure (e.g. AWS ECS, GCP Cloud Run, Render, or dedicated VPS) backed by **PostgreSQL (Supabase)**.
+
+### 8.1 Vercel Frontend Deployment
+1. **Root Directory**: Select `frontend` as the project root directory in the Vercel Dashboard.
+2. **Build Command**: `npm run build`
+3. **Output Directory**: `dist`
+4. **Environment Variables**:
+   - `VITE_API_URL`: The public HTTPS URL of your deployed backend (e.g. `https://api.nexora.security`).
+5. **SPA Rewrites**: Handled automatically by `frontend/vercel.json`:
+   ```json
+   {
+     "rewrites": [
+       { "source": "/(.*)", "destination": "/index.html" }
+     ]
+   }
+   ```
+   This ensures deep linking and browser refresh work across all routes (`/audits`, `/findings/:id`, `/unresolved`, etc.) without 404 errors.
+
+### 8.2 Backend Deployment & Environment
+Configure the following production environment variables on your backend host:
+- `DATABASE_URL`: `postgresql+asyncpg://<user>:<password>@<host>:<port>/<db>`
+- `SYNC_DATABASE_URL`: `postgresql://<user>:<password>@<host>:<port>/<db>`
+- `CORS_ORIGINS`: Comma-separated list of allowed origins, e.g. `https://nexora.vercel.app,https://yourcustomdomain.com`
+- `CORS_ORIGIN_REGEX`: `https://.*\.vercel\.app` (allows ephemeral Vercel preview deployments)
+- `ADMIN_TOKEN`: Secure static token for protected administrative and AI settings endpoints
+- `NVIDIA_API_KEY`: API key for NVIDIA NIM advisory AI models (`meta/llama-3.2-11b-vision-instruct`)
+- `MAX_UPLOAD_SIZE`: `5242880` (5MB upload boundary)
+
+### 8.3 In-Memory Report Streaming
+Unlike traditional architectures that write generated PDFs to ephemeral local serverless storage, NEXORA's `PDFReportService` renders compliance dossiers directly into in-memory `io.BytesIO` binary streams. The FastAPI endpoint streams `application/pdf` directly to the client via `Response(content=pdf_bytes, media_type="application/pdf")`, guaranteeing complete compatibility with stateless serverless/container runtimes.
+
+### 8.4 Deterministic Invariant & Advisory AI
+- **Single Source of Truth**: All compliance verdicts (`PASS`, `FAIL`, `UNRESOLVED`, `CONFLICT`, `N/A`) and 4-factor risk scores are computed deterministically by the Python security evaluator.
+- **Advisory AI**: NVIDIA NIM / RAG outputs provide explanation, regulatory cross-references, and human decision support only. AI suggestions can NEVER silently override a deterministic rule failure or alter compliance metrics.

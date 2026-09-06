@@ -31,21 +31,31 @@ async def upload_configuration(
     vendor: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db)
 ):
+    max_size = getattr(settings, "MAX_UPLOAD_SIZE", 5 * 1024 * 1024)
     content_text = None
     fname = None
     if file:
-        content_bytes = await file.read()
+        content_bytes = await file.read(max_size + 1)
+        if len(content_bytes) > max_size:
+            raise HTTPException(status_code=413, detail=f"File exceeds maximum allowed upload size ({max_size // (1024*1024)}MB)")
         content_text = content_bytes.decode("utf-8", errors="replace")
-        fname = file.filename
+        fname = os.path.basename(file.filename or "uploaded_config.cfg")
     elif raw_content:
+        if len(raw_content.encode("utf-8")) > max_size:
+            raise HTTPException(status_code=413, detail=f"Configuration exceeds maximum allowed upload size ({max_size // (1024*1024)}MB)")
         content_text = raw_content
-        fname = filename or "uploaded_config.cfg"
+        fname = os.path.basename(filename or "uploaded_config.cfg")
     else:
         try:
             body = await request.json()
-            content_text = body.get("raw_text") or body.get("raw_content")
-            fname = body.get("name") or body.get("filename") or "uploaded_config.cfg"
+            raw = body.get("raw_text") or body.get("raw_content")
+            if raw and len(raw.encode("utf-8")) > max_size:
+                raise HTTPException(status_code=413, detail=f"Configuration exceeds maximum allowed upload size ({max_size // (1024*1024)}MB)")
+            content_text = raw
+            fname = os.path.basename(body.get("name") or body.get("filename") or "uploaded_config.cfg")
             vendor = vendor or body.get("vendor")
+        except HTTPException:
+            raise
         except Exception:
             pass
 
@@ -181,8 +191,9 @@ async def list_sample_configurations():
 @router.get("/samples/load/{filename}")
 async def load_sample_configuration(filename: str):
     safe_filename = os.path.basename(filename)
-    path = os.path.join(settings.SAMPLE_CONFIGS_DIR, safe_filename)
-    if not os.path.exists(path):
+    samples_dir = os.path.abspath(settings.SAMPLE_CONFIGS_DIR)
+    path = os.path.abspath(os.path.join(samples_dir, safe_filename))
+    if not path.startswith(samples_dir) or not os.path.exists(path) or not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="Sample config not found")
 
     with open(path, "r", encoding="utf-8", errors="replace") as f:

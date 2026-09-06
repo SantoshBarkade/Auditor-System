@@ -7,7 +7,10 @@ import {
   CheckCircle2,
   FileText,
   FileSpreadsheet,
-  FileCode
+  FileCode,
+  AlertCircle,
+  Shield,
+  ArrowRight
 } from 'lucide-react';
 import { api } from '../services/api';
 import { showToast } from '../components/Toast';
@@ -21,11 +24,13 @@ export default function Reports({ selectedAuditId: initialAuditId = null, onNavi
   const [blockchainInfo, setBlockchainInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingAudit, setLoadingAudit] = useState(false);
+  const [error, setError] = useState(null);
 
   // Load audit list and blockchain ledger on mount
   useEffect(() => {
     async function init() {
       setLoading(true);
+      setError(null);
       try {
         const [auditsData, blocksData] = await Promise.all([
           api.getAudits().catch(() => []),
@@ -36,13 +41,19 @@ export default function Reports({ selectedAuditId: initialAuditId = null, onNavi
           setAudits(auditsData);
           const defaultId = initialAuditId || auditsData[0].id;
           setSelectedAuditId(defaultId);
+        } else {
+          setAudits([]);
+          setSelectedAuditId(null);
         }
 
         if (Array.isArray(blocksData) && blocksData.length > 0) {
           setBlockchainInfo(blocksData[blocksData.length - 1]);
+        } else {
+          setBlockchainInfo(null);
         }
       } catch (err) {
-        console.warn('Failed to load reports init data', err);
+        console.error('Failed to load reports init data:', err);
+        setError('Failed to load audits or blockchain ledger from backend.');
       } finally {
         setLoading(false);
       }
@@ -52,7 +63,12 @@ export default function Reports({ selectedAuditId: initialAuditId = null, onNavi
 
   // When selectedAuditId changes, fetch real posture & findings
   useEffect(() => {
-    if (!selectedAuditId) return;
+    if (!selectedAuditId) {
+      setAuditDetail(null);
+      setPosture(null);
+      setFindings([]);
+      return;
+    }
 
     async function loadAuditData(id) {
       setLoadingAudit(true);
@@ -66,7 +82,7 @@ export default function Reports({ selectedAuditId: initialAuditId = null, onNavi
         if (pRes) setPosture(pRes);
         if (Array.isArray(fRes)) setFindings(fRes);
       } catch (err) {
-        console.warn('Error loading report audit data', err);
+        console.error('Error loading report audit data:', err);
       } finally {
         setLoadingAudit(false);
       }
@@ -75,18 +91,13 @@ export default function Reports({ selectedAuditId: initialAuditId = null, onNavi
     loadAuditData(selectedAuditId);
   }, [selectedAuditId]);
 
-  const activeAudit = auditDetail || audits.find((a) => a.id === selectedAuditId) || {
-    id: selectedAuditId || '—',
-    vendor: 'Cisco',
-    status: 'COMPLETED',
-    compliance_score: '—'
-  };
+  const activeAudit = auditDetail || audits.find((a) => a.id === selectedAuditId);
 
   // Compute honest metrics from posture and findings
   const complianceScore =
     posture?.overall_compliance_pct ??
     activeAudit?.compliance_score ??
-    '—';
+    null;
 
   let totalControls = 0;
   let satisfiedControls = 0;
@@ -105,6 +116,10 @@ export default function Reports({ selectedAuditId: initialAuditId = null, onNavi
   const unresolvedCount = posture?.unresolved_count ?? findings.filter((f) => f.status === 'UNRESOLVED').length;
 
   const handleDownload = (type) => {
+    if (!activeAudit?.id) {
+      showToast('Select an audit first before downloading evidence packages.', 'error');
+      return;
+    }
     const auditId = activeAudit.id;
     let url = '';
     if (type === 'pdf') url = api.getReportPdfUrl(auditId);
@@ -135,66 +150,113 @@ export default function Reports({ selectedAuditId: initialAuditId = null, onNavi
         </div>
 
         {/* Audit Selector */}
-        <div className="shrink-0 space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Target audit</label>
-          <div className="relative min-w-[280px]">
-            <select
-              value={selectedAuditId || ''}
-              onChange={(e) => setSelectedAuditId(Number(e.target.value))}
-              className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-4 pr-10 py-2.5 text-sm font-mono text-slate-100 focus:outline-none focus:border-cyan-500 appearance-none cursor-pointer hover:border-slate-700 transition-colors shadow-sm"
-            >
-              {audits.map((a) => (
-                <option key={a.id} value={a.id} className="bg-slate-950 text-slate-100 font-mono text-sm">
-                  Audit #{a.id} — {a.vendor || 'Cisco'} ({a.compliance_score ?? '82'}%)
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        {audits.length > 0 && (
+          <div className="shrink-0 space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Target audit</label>
+            <div className="relative min-w-[280px]">
+              <select
+                value={selectedAuditId || ''}
+                onChange={(e) => setSelectedAuditId(Number(e.target.value))}
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-4 pr-10 py-2.5 text-sm font-mono text-slate-100 focus:outline-none focus:border-cyan-500 appearance-none cursor-pointer hover:border-slate-700 transition-colors shadow-sm"
+              >
+                {audits.map((a) => (
+                  <option key={a.id} value={a.id} className="bg-slate-950 text-slate-100 font-mono text-sm">
+                    Audit #{a.id} — {a.vendor || 'Cisco'} ({a.compliance_score != null ? `${a.compliance_score}%` : 'Pending'})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="border-t border-slate-800/80" />
 
-      {loading || loadingAudit ? (
-        <div className="py-20 text-center text-slate-400 flex items-center justify-center space-x-3">
-          <RefreshCw className="w-5 h-5 animate-spin text-cyan-400" />
-          <span className="text-base font-medium">Loading report deliverables...</span>
+      {/* Loading State */}
+      {loading ? (
+        <div className="py-24 text-center text-slate-400 flex flex-col items-center justify-center space-y-3">
+          <RefreshCw className="w-6 h-6 animate-spin text-cyan-400" />
+          <span className="font-mono text-sm">Loading audit reports & blockchain ledger...</span>
+        </div>
+      ) : error ? (
+        <div className="p-10 rounded-2xl bg-rose-950/20 border border-rose-900/50 text-center space-y-3">
+          <AlertCircle className="w-8 h-8 text-rose-400 mx-auto" />
+          <div className="text-white font-semibold">Unable to load reports</div>
+          <p className="text-sm text-rose-300/80 max-w-md mx-auto">{error}</p>
+        </div>
+      ) : audits.length === 0 ? (
+        /* Honest Empty State when 0 Audits exist */
+        <div className="p-16 text-center rounded-2xl bg-slate-900/30 border border-slate-800/80 space-y-5">
+          <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/25 flex items-center justify-center mx-auto text-cyan-400">
+            <FileText className="w-7 h-7" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-xl font-semibold text-white">No audits executed yet</h3>
+            <p className="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+              Run an audit first to generate and export executive reports, SIEM-compatible CSV datasets, and JSON cryptographic evidence packages.
+            </p>
+          </div>
+          {onNavigateTab && (
+            <button
+              onClick={() => onNavigateTab('audits')}
+              className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-sm transition-colors cursor-pointer shadow-sm"
+            >
+              <Shield className="w-4 h-4" />
+              <span>Execute your first audit</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
         </div>
       ) : (
         <>
-          {/* 2. REPORT SUMMARY HEADLINE (De-cardified) */}
-          <div className="space-y-3">
-            <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Audit Compliance Baseline
+          {/* 2. EXECUTIVE POSTURE HIGHLIGHTS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-5 rounded-xl bg-slate-900/40 border border-slate-800/80 space-y-2 shadow-sm">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Audited Vendor
+              </div>
+              <div className="text-2xl sm:text-3xl font-bold text-white">
+                {activeAudit?.vendor || 'Cisco'}
+              </div>
+              <div className="text-xs font-mono text-slate-400">
+                Audit #{activeAudit?.id || '—'} · {activeAudit?.status || 'COMPLETED'}
+              </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-4">
-              <div className="flex items-baseline space-x-4">
-                <span className="text-5xl sm:text-6xl font-extralight tracking-tight text-white">
-                  {complianceScore}%
-                </span>
-                <span className="text-sm font-mono text-slate-300 font-medium">
-                  Audit #{activeAudit.id} · {activeAudit.vendor} · {activeAudit.device || 'Cisco-CORE-01'}
-                </span>
+            <div className="p-5 rounded-xl bg-slate-900/40 border border-slate-800/80 space-y-2 shadow-sm">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Compliance score
               </div>
+              <div className="text-2xl sm:text-3xl font-bold font-mono text-white">
+                {complianceScore !== null ? `${complianceScore}%` : '—'}
+              </div>
+              <div className="text-xs font-mono text-slate-400">
+                {passCount} PASS · {failCount} FAIL · {unresolvedCount} UNRESOLVED
+              </div>
+            </div>
 
-              {/* Quick Status Line */}
-              <div className="flex flex-wrap items-center gap-4 text-sm font-mono font-semibold">
-                <span className="flex items-center space-x-2 text-emerald-400">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span>{passCount} PASS</span>
-                </span>
-                <span className="text-slate-700">·</span>
-                <span className="flex items-center space-x-2 text-rose-400">
-                  <span className="w-2 h-2 rounded-full bg-rose-400" />
-                  <span>{failCount} FAIL</span>
-                </span>
-                <span className="text-slate-700">·</span>
-                <span className="flex items-center space-x-2 text-amber-400">
-                  <span className="w-2 h-2 rounded-full bg-amber-400" />
-                  <span>{unresolvedCount} UNRESOLVED</span>
-                </span>
+            <div className="p-5 rounded-xl bg-slate-900/40 border border-slate-800/80 space-y-2 shadow-sm">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Security gaps
+              </div>
+              <div className="text-2xl sm:text-3xl font-bold font-mono text-rose-400">
+                {failCount}
+              </div>
+              <div className="text-xs font-mono text-slate-400">
+                Deterministic findings requiring remediation
+              </div>
+            </div>
+
+            <div className="p-5 rounded-xl bg-slate-900/40 border border-slate-800/80 space-y-2 shadow-sm">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Ledger integrity
+              </div>
+              <div className="text-2xl sm:text-3xl font-bold font-mono text-emerald-400">
+                {blockchainInfo ? 'SEALED' : 'PENDING'}
+              </div>
+              <div className="text-xs font-mono text-slate-400">
+                {blockchainInfo ? `Block #${blockchainInfo.block_index} anchored` : 'Awaiting audit seal'}
               </div>
             </div>
           </div>
@@ -338,21 +400,27 @@ export default function Reports({ selectedAuditId: initialAuditId = null, onNavi
               Blockchain integrity
             </h2>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-xl bg-slate-900/40 border border-slate-800/80 font-mono text-sm shadow-sm">
-              <div className="space-y-1">
-                <div className="text-slate-200 font-semibold text-sm sm:text-base">
-                  Block #{blockchainInfo?.block_index ?? '043'} · {blockchainInfo?.event_type || 'AUDIT_SEALED'}
+            {blockchainInfo ? (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-xl bg-slate-900/40 border border-slate-800/80 font-mono text-sm shadow-sm">
+                <div className="space-y-1">
+                  <div className="text-slate-200 font-semibold text-sm sm:text-base">
+                    Block #{blockchainInfo.block_index} · {blockchainInfo.event_type}
+                  </div>
+                  <div className="text-xs sm:text-sm text-slate-400 break-all">
+                    SHA-256: {blockchainInfo.block_hash}
+                  </div>
                 </div>
-                <div className="text-xs sm:text-sm text-slate-400 break-all">
-                  SHA-256: {blockchainInfo?.block_hash || 'c0ba32998ac5b25d8aca5fa9d2f354848698a79d3a628839143948b086212aee'}
-                </div>
-              </div>
 
-              <div className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shrink-0 self-start sm:self-auto text-sm">
-                <CheckCircle2 className="w-4 h-4" />
-                <span className="font-semibold">Verified</span>
+                <div className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shrink-0 self-start sm:self-auto text-sm">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span className="font-semibold">Verified</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="p-5 rounded-xl bg-slate-900/30 border border-slate-800/80 text-sm text-slate-400 font-mono">
+                No blockchain blocks recorded yet. Audit execution will seal cryptographic blocks to the ledger.
+              </div>
+            )}
           </div>
         </>
       )}
