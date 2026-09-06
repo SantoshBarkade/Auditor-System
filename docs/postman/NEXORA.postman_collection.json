@@ -1,0 +1,184 @@
+{
+  "info": {
+    "_postman_id": "9a1b2c3d-e4f5-4678-90ab-cdef12345678",
+    "name": "NEXORA SIH 2026 API Collection",
+    "description": "API collection for NEXORA — AI-Driven Multi-Vendor Network Security Compliance Auditor (SIH26155, Team WeirdBits)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/health",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "health"]
+        }
+      }
+    },
+    {
+      "name": "Dashboard Summary",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/dashboard/summary",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "dashboard", "summary"]
+        }
+      }
+    },
+    {
+      "name": "Trigger 1-Click Cisco Demo",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/dashboard/demo/Cisco",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "dashboard", "demo", "Cisco"]
+        }
+      }
+    },
+    {
+      "name": "Detect Vendor",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"raw_content\": \"hostname CORE-RTR-01\\nline vty 0 4\\n transport input telnet\",\n  \"filename\": \"cisco_test.cfg\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/configurations/detect-vendor",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "configurations", "detect-vendor"]
+        }
+      }
+    },
+    {
+      "name": "Run Audit",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"configuration_id\": 1\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/audits/run",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "audits", "run"]
+        }
+      }
+    },
+    {
+      "name": "Get Audit Findings",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/audits/1/findings",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "audits", "1", "findings"]
+        }
+      }
+    },
+    {
+      "name": "Get Finding Exact Evidence",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/findings/1/evidence",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "findings", "1", "evidence"]
+        }
+      }
+    },
+    {
+      "name": "Approve Finding Remediation",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reviewer\": \"Security Administrator\",\n  \"note\": \"Approved for sandboxed simulation\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/findings/1/approve",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "findings", "1", "approve"]
+        }
+      }
+    },
+    {
+      "name": "Simulate Sandboxed Remediation",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{base_url}}/api/v1/findings/1/simulate-remediation",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "findings", "1", "simulate-remediation"]
+        }
+      }
+    },
+    {
+      "name": "Get Blockchain Blocks",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/blockchain",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "blockchain"]
+        }
+      }
+    },
+    {
+      "name": "Verify Blockchain Integrity",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/blockchain/verify",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "blockchain", "verify"]
+        }
+      }
+    },
+    {
+      "name": "Blockchain Live Tamper Demonstration",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/blockchain/tamper-test",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "blockchain", "tamper-test"]
+        }
+      }
+    },
+    {
+      "name": "Download PDF Report",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/reports/1/pdf",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "reports", "1", "pdf"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    }
+  ]
+}

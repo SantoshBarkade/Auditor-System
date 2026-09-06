@@ -1,0 +1,5 @@
+{
+  "python.terminal.useEnvFile": true,
+  "python.envFile": "${workspaceFolder}/.env",
+  "python.defaultInterpreterPath": "C:\\SIH\\SIH PROTOTYPE4\\SIH PROTOTYPE\\.venv\\Scripts\\python.exe"
+}

@@ -1,0 +1,33 @@
+{
+  "cisco": {
+    "config_id": 39,
+    "audit_id": 30,
+    "sha256": "6723c9bc4d1e83f5d7fc52cae7a7e738dba9ad92e0029c77133a8dfdfae201a0",
+    "finding_count": 11,
+    "verdicts": {
+      "FAIL": 8,
+      "UNRESOLVED": 3
+    },
+    "average_risk": 73.54545454545455
+  },
+  "fortinet": {
+    "config_id": 40,
+    "audit_id": 31,
+    "sha256": "75f70181669b125596fa2f03183db2bee27a2906a4c4240dc47fb08e8a1d57e9",
+    "finding_count": 9,
+    "verdicts": {
+      "FAIL": 9
+    },
+    "average_risk": 91.44444444444444
+  },
+  "juniper": {
+    "config_id": 41,
+    "audit_id": 32,
+    "sha256": "3fa6dcd425b2e39d57c0a5fda5e5730956d504139de0b70f277e01a1bea74e2c",
+    "finding_count": 7,
+    "verdicts": {
+      "FAIL": 7
+    },
+    "average_risk": 88.85714285714286
+  }
+}
