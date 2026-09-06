@@ -80,6 +80,16 @@ async def global_exception_handler(request: Request, exc: Exception):
         }
     )
 
+@app.get("/health")
+async def health():
+    return {
+        "status": "healthy",
+        "project": settings.PROJECT_NAME,
+        "version": settings.VERSION,
+        "sih_problem_id": settings.SIH_PROBLEM_ID,
+        "team": settings.TEAM_NAME
+    }
+
 @app.get("/")
 async def root():
     return {

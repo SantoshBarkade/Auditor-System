@@ -1,7 +1,15 @@
 ﻿// Production-safe Environment-based API Configuration
-const rawApiUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || '';
-const API_ROOT = rawApiUrl.replace(/\/+$/, '');
-export const API_BASE = API_ROOT ? `${API_ROOT}/api/v1` : '/api/v1';
+// Supports both VITE_API_BASE_URL (Render backend URL) and VITE_API_URL
+const rawApiUrl =
+  (typeof import.meta !== 'undefined' &&
+    (import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL)) ||
+  '';
+const cleanUrl = rawApiUrl.trim().replace(/\/+$/, '');
+export const API_BASE = cleanUrl
+  ? cleanUrl.endsWith('/api/v1')
+    ? cleanUrl
+    : `${cleanUrl}/api/v1`
+  : '/api/v1';
 
 export class ApiError extends Error {
   constructor(message, status = 500, data = null) {
