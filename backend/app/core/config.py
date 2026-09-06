@@ -36,8 +36,16 @@ class Settings(BaseSettings):
     ADMIN_TOKEN: str = "dev-token-change-in-prod"
     
     # Storage
-    DATABASE_URL: str = f"sqlite+aiosqlite:///{BASE_DIR}/nexora.db"
-    SYNC_DATABASE_URL: str = f"sqlite:///{BASE_DIR}/nexora.db"
+    DATABASE_URL: str = (
+        "sqlite+aiosqlite:////tmp/nexora.db"
+        if os.environ.get("VERCEL")
+        else f"sqlite+aiosqlite:///{BASE_DIR}/nexora.db"
+    )
+    SYNC_DATABASE_URL: str = (
+        "sqlite:////tmp/nexora.db"
+        if os.environ.get("VERCEL")
+        else f"sqlite:///{BASE_DIR}/nexora.db"
+    )
     
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
