@@ -1,5 +1,5 @@
-from typing import Dict, Any
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Dict, Any, Optional, List
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.core.database import get_db
@@ -16,6 +16,36 @@ from backend.app.services.ai.explainer import AIExplanationService
 from backend.app.services.blockchain.chain import BlockchainLedger
 
 router = APIRouter(prefix="/findings", tags=["Findings"])
+
+
+@router.get("", response_model=List[FindingResponse])
+async def list_all_findings(
+    vendor: Optional[str]   = Query(None, description="Filter by vendor (Cisco, Fortinet, Juniper)"),
+    severity: Optional[str] = Query(None, description="Filter by severity (CRITICAL, HIGH, MEDIUM, LOW, INFO)"),
+    status: Optional[str]   = Query(None, description="Filter by status (OPEN, APPROVED, VERIFIED, REJECTED)"),
+    audit_id: Optional[int] = Query(None, description="Filter by specific audit ID"),
+    limit: int              = Query(200, ge=1, le=500, description="Maximum number of findings to return"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Flat findings list across all audits. Supports optional filtering by
+    vendor, severity, status, and audit_id. Replaces the frontend O(N) loop
+    pattern of fetching findings per-audit.
+    """
+    query = select(Finding)
+
+    if audit_id is not None:
+        query = query.where(Finding.audit_id == audit_id)
+    if vendor:
+        query = query.where(Finding.vendor == vendor)
+    if severity:
+        query = query.where(Finding.severity == severity.upper())
+    if status:
+        query = query.where(Finding.status == status.upper())
+
+    query = query.order_by(Finding.risk_score.desc()).limit(limit)
+    res = await db.execute(query)
+    return list(res.scalars().all())
 
 @router.get("/{finding_id}", response_model=FindingResponse)
 async def get_finding(finding_id: int, db: AsyncSession = Depends(get_db)):

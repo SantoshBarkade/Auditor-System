@@ -92,8 +92,10 @@ class ComplianceEngine:
 
         for fw, controls in cls.FRAMEWORK_BASELINE_CONTROLS.items():
             baseline_count = len(controls)
-            gap_count = len(gaps_by_framework[fw])
-            satisfied_count = max(0, baseline_count - gap_count)
+            # Cap gap_count at baseline_count: multiple findings can violate the
+            # same control, but we can never have more gaps than baseline controls.
+            gap_count = min(len(gaps_by_framework[fw]), baseline_count)
+            satisfied_count = baseline_count - gap_count
             pct = round((satisfied_count / baseline_count) * 100, 1)
 
             total_baseline += baseline_count

@@ -49,14 +49,22 @@ class RemediationSimulator:
             else:
                 remediation.status = "APPROVED"
 
-            # Create Approval record
-            approval = Approval(
-                remediation_id=remediation.id,
-                reviewer=reviewer,
-                decision="APPROVED",
-                note=note or "Approved for sandboxed simulation"
+            # Guard: only create Approval if none already exists for this remediation.
+            # Prevents duplicate Approval rows on re-simulation of already-approved findings.
+            existing_approval_res = await session.execute(
+                select(Approval).where(
+                    Approval.remediation_id == remediation.id,
+                    Approval.decision == "APPROVED"
+                )
             )
-            session.add(approval)
+            if not existing_approval_res.scalar_one_or_none():
+                approval = Approval(
+                    remediation_id=remediation.id,
+                    reviewer=reviewer,
+                    decision="APPROVED",
+                    note=note or "Approved for sandboxed simulation"
+                )
+                session.add(approval)
 
             finding.status = "APPROVED"
 

@@ -116,6 +116,22 @@ class VerificationService:
             await session.commit()
 
             # 7. Record Verification Event on Blockchain
+            if not is_target_fixed:
+                # Record failure explicitly so the audit trail is complete
+                await BlockchainLedger.append_event(
+                    event_type="VERIFICATION_FAILED",
+                    event_data={
+                        "original_audit_id": orig_audit.id,
+                        "verification_audit_id": verif_audit.id,
+                        "target_rule": target_finding.rule_id,
+                        "reason": "Target vulnerability persists in sandboxed configuration after patch application.",
+                        "risk_before": orig_risk,
+                        "risk_after": new_risk,
+                    },
+                    actor="VERIFICATION_ENGINE",
+                    audit_id=verif_audit.id
+                )
+
             await BlockchainLedger.append_event(
                 event_type="VERIFICATION_COMPLETED",
                 event_data={
